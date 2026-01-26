@@ -6,6 +6,39 @@ You are helping create animated videos using **Remotion** - a React framework fo
 
 This workspace is for creating marketing videos, social media content, and animated presentations for Langston.
 
+## Brand Colors
+
+**Always use these Langston brand colors when creating videos:**
+
+| Name | Hex | Usage |
+|------|-----|-------|
+| Midnight Green | `#155F6C` | Primary - headers, key elements |
+| Tiffany Blue | `#73C1BD` | Secondary - accents, highlights |
+| Moss Green | `#89975D` | Success states, nature themes |
+| Naples Yellow | `#FFDD6F` | Attention, warnings, energy |
+| Burnt Sienna | `#DD6A48` | Warmth, calls-to-action |
+| Amaranth Purple | `#9D4254` | Premium, emphasis |
+| Lapis Lazuli | `#365D83` | Trust, professional, links |
+
+**Color combinations that work well:**
+- Midnight Green + Tiffany Blue (professional)
+- Burnt Sienna + Naples Yellow (energetic)
+- Lapis Lazuli + Tiffany Blue (calm, trustworthy)
+- Amaranth Purple + Naples Yellow (bold contrast)
+
+**In code:**
+```tsx
+const BRAND_COLORS = {
+  midnightGreen: "#155F6C",
+  tiffanyBlue: "#73C1BD",
+  mossGreen: "#89975D",
+  naplesYellow: "#FFDD6F",
+  burntSienna: "#DD6A48",
+  amaranthPurple: "#9D4254",
+  lapisLazuli: "#365D83",
+};
+```
+
 ## Session Start (DO THIS FIRST)
 
 **At the start of every session**, before doing anything else:
