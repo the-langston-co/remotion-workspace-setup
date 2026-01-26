@@ -178,17 +178,16 @@ fi
 # ----------------------------------------------------------------------------
 print_step "Installing Remotion project dependencies..."
 
-if [[ ! -d "$WORKSPACE_DIR/my-video" ]]; then
-    print_warning "No my-video project found. Skipping dependency install."
-    print_warning "Create a new Remotion project with: cd $WORKSPACE_DIR && npx create-video@latest my-video"
-elif [[ -d "$WORKSPACE_DIR/my-video/node_modules" ]]; then
+cd "$WORKSPACE_DIR"
+
+if [[ ! -f "package.json" ]]; then
+    print_warning "No package.json found. Skipping dependency install."
+elif [[ -d "node_modules" ]]; then
     print_success "Dependencies already installed"
 else
-    cd "$WORKSPACE_DIR/my-video"
     print_warning "Installing packages (this may take a minute)..."
     run_quiet npm install
     print_success "Remotion project ready"
-    cd "$WORKSPACE_DIR"
 fi
 
 # ----------------------------------------------------------------------------

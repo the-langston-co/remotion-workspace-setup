@@ -9,20 +9,25 @@ This workspace is for creating marketing videos, social media content, and anima
 ## Key Concepts
 
 - **Remotion** turns React code into videos
-- Videos are made of **compositions** (like scenes)
+- Videos are made of **compositions** - each composition is a separate video
+- All compositions are defined in `src/Root.tsx`
 - Animations are driven by the current **frame** number
-- The preview server lets you see changes instantly
+- The preview server (Remotion Studio) lets you see changes instantly
 
 ## Project Structure
 
 ```
 langston-videos/
-├── my-video/              # Your Remotion project
-│   ├── src/
-│   │   ├── Root.tsx       # Defines all compositions
-│   │   └── HelloWorld.tsx # Your video components
-│   └── public/            # Images, audio, fonts
-└── (future projects...)
+├── AGENTS.md              # This file - AI instructions
+├── opencode.jsonc         # OpenCode config
+├── package.json           # Project dependencies
+├── remotion.config.ts     # Remotion settings
+├── src/
+│   ├── Root.tsx           # All compositions registered here
+│   ├── HelloWorld.tsx     # Example video component
+│   └── (new videos...)    # Add new video components here
+├── public/                # Images, audio, fonts go here
+└── .opencode/skill/       # Remotion best practices
 ```
 
 ## Dev Server Management
@@ -31,38 +36,71 @@ langston-videos/
 
 ### Auto-start behavior
 When the user asks to create, edit, or preview a video:
-1. Check if the dev server is running (look for process on port 3000 or check `lsof -i :3000`)
-2. If not running, start it automatically: `cd my-video && npm run dev &`
+1. Check if the dev server is running: `lsof -i :3000`
+2. If not running, start it: `npm run dev &`
 3. Wait a few seconds for it to start, then proceed
 4. Tell the user the preview is available at http://localhost:3000
 
 ### Starting manually
 ```bash
-cd my-video && npm run dev
+npm run dev
 ```
 Opens Remotion Studio at http://localhost:3000
 
 ### Stopping the server
 ```bash
-# Find and kill the process
 lsof -ti :3000 | xargs kill -9
 ```
 
 ## Common Tasks
 
-### Creating a New Video/Scene
-1. Create a new component in `src/`
+### Creating a New Video
+1. Create a new component file in `src/` (e.g., `src/MyNewVideo.tsx`)
 2. Register it in `src/Root.tsx` as a `<Composition>`
-3. Preview it in Remotion Studio
+3. It will appear in Remotion Studio's sidebar
+
+Example new video component:
+```tsx
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
+
+export const MyNewVideo = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  
+  const opacity = interpolate(frame, [0, fps], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  return (
+    <AbsoluteFill className="bg-blue-500 items-center justify-center">
+      <h1 style={{ opacity }} className="text-white text-6xl font-bold">
+        My New Video
+      </h1>
+    </AbsoluteFill>
+  );
+};
+```
+
+Register it in `src/Root.tsx`:
+```tsx
+<Composition
+  id="MyNewVideo"
+  component={MyNewVideo}
+  durationInFrames={150}
+  fps={30}
+  width={1920}
+  height={1080}
+/>
+```
 
 ### Rendering a Video
 ```bash
-cd my-video && npx remotion render [CompositionId] out/video.mp4
+npx remotion render [CompositionId] out/video.mp4
 ```
 
 ### Rendering a Still Image
 ```bash
-cd my-video && npx remotion still [CompositionId] out/thumbnail.png
+npx remotion still [CompositionId] out/thumbnail.png
 ```
 
 ## Skills Available
@@ -90,11 +128,11 @@ The `remotion-best-practices` skill is loaded automatically. It contains detaile
 
 **"Module not found" or import errors:**
 ```bash
-cd my-video && npm install
+npm install
 ```
 
 **"Command not found: npm":**
-The user needs to close and reopen their terminal, or run:
+Close and reopen Terminal, or run:
 ```bash
 source ~/.zprofile
 ```
@@ -102,24 +140,22 @@ source ~/.zprofile
 **Permission errors during npm install:**
 ```bash
 sudo chown -R $(whoami) ~/.npm
-cd my-video && npm install
+npm install
 ```
 
 ### Dev Server Issues
 
 **Port 3000 already in use:**
 ```bash
-# Kill whatever is using port 3000
 lsof -ti :3000 | xargs kill -9
-# Then restart
-cd my-video && npm run dev
+npm run dev
 ```
 
 **Server won't start:**
 1. Check for errors in terminal output
 2. Try deleting node_modules and reinstalling:
 ```bash
-cd my-video && rm -rf node_modules && npm install
+rm -rf node_modules && npm install
 ```
 
 ### Runtime/Browser Errors
