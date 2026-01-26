@@ -275,7 +275,7 @@ echo "  • Ask Neil for help"
 echo -e "  • Share this log file if troubleshooting: ${YELLOW}$LOG_FILE${NC}"
 echo ""
 
-read -p "Open OpenCode now? (y/n) " -n 1 -r
+read -p "Open OpenCode now? (y/n) " -n 1 -r < /dev/tty
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     open "$WORKSPACE_DIR"
