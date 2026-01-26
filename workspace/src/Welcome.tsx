@@ -50,6 +50,7 @@ export const WelcomeSchema = z.object({
   setupEmoji: z.string().default("✅"),
 
   // Scene 3: How It Works (TypewriterScene)
+  howItWorksIntro: z.string().default("To create a video, just describe what you want..."),
   typewriterText: z.string().default("Create a welcome video with animated text"),
   aiResponse: z.string().default("I'll create that for you! Setting up a new composition with spring animations..."),
 
@@ -186,20 +187,46 @@ const Scene = ({ title, subtitle, items, gradient, emoji }: SceneProps) => {
 };
 
 type TypewriterSceneProps = {
+  intro: string;
   text: string;
   response: string;
 };
 
-const TypewriterScene = ({ text, response }: TypewriterSceneProps) => {
+const TypewriterScene = ({ intro, text, response }: TypewriterSceneProps) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const charIndex = Math.min(Math.floor(frame / 2), text.length);
+  const introDelay = 0;
+  const terminalDelay = 45;
+
+  const introOpacity = interpolate(frame, [introDelay, introDelay + 20], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const introY = interpolate(frame, [introDelay, introDelay + 25], [30, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.quad),
+  });
+
+  const terminalOpacity = interpolate(frame, [terminalDelay, terminalDelay + 20], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const terminalY = interpolate(frame, [terminalDelay, terminalDelay + 25], [30, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.quad),
+  });
+
+  const typewriterStart = terminalDelay + 30;
+  const adjustedFrame = Math.max(0, frame - typewriterStart);
+  const charIndex = Math.min(Math.floor(adjustedFrame / 2), text.length);
   const displayText = text.slice(0, charIndex);
 
   const cursorOpacity = interpolate(frame % 20, [0, 10, 20], [1, 0, 1]);
 
-  const responseDelay = text.length * 2 + 15;
+  const responseDelay = typewriterStart + text.length * 2 + 15;
   const responseOpacity = interpolate(
     frame,
     [responseDelay, responseDelay + 20],
@@ -218,13 +245,35 @@ const TypewriterScene = ({ text, response }: TypewriterSceneProps) => {
       style={{
         background: GRADIENTS.dark,
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         padding: 80,
         fontFamily: FONT_FAMILY,
       }}
     >
-      <div style={{ width: "100%", maxWidth: 1000 }}>
+      <h2
+        style={{
+          opacity: introOpacity,
+          transform: `translateY(${introY}px)`,
+          color: "#ffffff",
+          fontSize: 48,
+          fontWeight: 600,
+          marginBottom: 50,
+          textAlign: "center",
+          textShadow: "0 4px 20px rgba(0,0,0,0.3)",
+        }}
+      >
+        {intro}
+      </h2>
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 1000,
+          opacity: terminalOpacity,
+          transform: `translateY(${terminalY}px)`,
+        }}
+      >
         <div
           style={{
             background: `rgba(21, 95, 108, 0.4)`,
@@ -345,8 +394,9 @@ export const Welcome = (props: WelcomeProps) => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence name="How It Works" durationInFrames={sceneDuration + 60}>
+      <TransitionSeries.Sequence name="How It Works" durationInFrames={sceneDuration + 120}>
         <TypewriterScene
+          intro={props.howItWorksIntro}
           text={props.typewriterText}
           response={props.aiResponse}
         />

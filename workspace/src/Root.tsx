@@ -6,7 +6,7 @@ export const RemotionRoot = () => {
     <Composition
       id="Welcome"
       component={Welcome}
-      durationInFrames={690}
+      durationInFrames={750}
       fps={30}
       width={1920}
       height={1080}
@@ -19,6 +19,7 @@ export const RemotionRoot = () => {
         welcomeEmoji: "🎬",
         setupTitle: "You're All Set Up!",
         setupEmoji: "✅",
+        howItWorksIntro: "To create a video, just describe what you want...",
         typewriterText: "Create a welcome video with animated text",
         aiResponse: "I'll create that for you! Setting up a new composition with spring animations...",
         tipsTitle: "Quick Tips",
