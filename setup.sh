@@ -37,7 +37,7 @@ echo "╚═══════════════════════�
 echo ""
 
 WORKSPACE_DIR="$HOME/Documents/code/langston-videos"
-SETUP_REPO_URL="https://github.com/langston-co/remotion-workspace-setup"
+SETUP_REPO_URL="https://github.com/the-langston-co/remotion-workspace-setup"
 
 # ----------------------------------------------------------------------------
 # Step 1: Check macOS

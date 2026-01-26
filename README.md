@@ -7,7 +7,7 @@ This repository contains everything needed to set up a new team member's compute
 Open **Terminal** (search for "Terminal" in Spotlight) and paste this command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/langston-co/remotion-workspace-setup/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/the-langston-co/remotion-workspace-setup/main/setup.sh | bash
 ```
 
 Then press **Enter** and follow the prompts.
