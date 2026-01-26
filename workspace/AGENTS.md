@@ -107,7 +107,13 @@ The dev server is auto-started at session begin (see above). These commands are 
 
 Example new video component:
 ```tsx
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
+
+const BRAND = {
+  midnightGreen: "#155F6C",
+  tiffanyBlue: "#73C1BD",
+  naplesYellow: "#FFDD6F",
+};
 
 export const MyNewVideo = () => {
   const frame = useCurrentFrame();
@@ -116,10 +122,28 @@ export const MyNewVideo = () => {
   const opacity = interpolate(frame, [0, fps], [0, 1], {
     extrapolateRight: "clamp",
   });
+  
+  const scale = spring({ frame, fps, config: { damping: 200 } });
 
   return (
-    <AbsoluteFill className="bg-blue-500 items-center justify-center">
-      <h1 style={{ opacity }} className="text-white text-6xl font-bold">
+    <AbsoluteFill
+      style={{
+        background: `linear-gradient(135deg, ${BRAND.midnightGreen} 0%, ${BRAND.tiffanyBlue} 100%)`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <h1
+        style={{
+          opacity,
+          transform: `scale(${scale})`,
+          color: "white",
+          fontSize: 72,
+          fontWeight: 700,
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        }}
+      >
         My New Video
       </h1>
     </AbsoluteFill>
@@ -151,9 +175,14 @@ npx remotion still [CompositionId] out/thumbnail.png
 
 ## Skills Available
 
-The `remotion-best-practices` skill is loaded automatically. It contains detailed guides for:
+**IMPORTANT: Load the `remotion-best-practices` skill at the start of any Remotion work:**
+```
+/skill remotion-best-practices
+```
+
+This skill contains detailed guides for:
 - Animations and timing
-- Charts and data visualization
+- Charts and data visualization  
 - Text effects and typography
 - Audio and video embedding
 - Transitions between scenes
@@ -161,12 +190,46 @@ The `remotion-best-practices` skill is loaded automatically. It contains detaile
 
 **Always refer to the skill documentation** when implementing Remotion features.
 
-## Important Rules
+## Critical Rules for Remotion Development
 
-1. **Never use CSS animations** - they don't render correctly. Use `useCurrentFrame()` for all animations.
-2. **Never use Tailwind animation classes** - same reason.
-3. **Always use `interpolate()` or `spring()`** for smooth animations.
-4. **Test in the preview** before rendering the final video.
+### Styling: ALWAYS Use Inline Styles
+
+**Avoid Tailwind CSS classes in Remotion components** - Even when installed, Tailwind can cause import/build errors and styling issues that result in black screens or missing styles.
+
+```tsx
+// ✅ CORRECT - Always use inline styles
+<div 
+  style={{
+    backgroundColor: "#155F6C",
+    color: "white",
+    fontSize: 24,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  }}
+>
+  Content
+</div>
+
+// ❌ WRONG - CSS classes are unreliable in Remotion
+<div className="bg-blue-500 text-white text-xl flex items-center justify-center">
+  Content  
+</div>
+```
+
+### Animation Rules
+
+1. **Never use CSS animations** - they don't render correctly during video export
+2. **Never use Tailwind animation classes** - same reason
+3. **Always use `useCurrentFrame()` + `interpolate()` or `spring()`** for all animations
+4. **Test in the preview** before rendering the final video
+
+### Development Workflow
+
+1. **Restart the dev server** when adding new compositions to `Root.tsx` - hot-reload doesn't pick up composition changes
+2. **Test styling immediately** - confirm basic styling works before building complex animations
+3. **Start with inline styles from the beginning** - don't rely on CSS classes
+4. **Keep `index.css` minimal** - only basic resets, avoid framework imports
 
 ## Troubleshooting
 
@@ -221,10 +284,20 @@ rm -rf node_modules && npm install
 - Make sure hooks are only called at the top level of components
 - Don't call hooks inside loops, conditions, or nested functions
 
-**White/blank preview:**
+**White/blank preview or black screen:**
 - Check browser console for errors
 - Verify the component is returning valid JSX
 - Check that the composition is registered in Root.tsx
+- **Most common cause:** CSS classes not loading - convert to inline styles immediately
+
+**Styling not appearing (black text on black, missing colors):**
+- **Convert all CSS classes to inline styles** - this is the fix
+- Don't try to debug Tailwind/CSS imports - just use inline styles
+- Check that background colors are set on the container
+
+**New composition not showing in sidebar:**
+- **Restart the dev server** - composition changes require a restart
+- Verify the composition is properly registered in `Root.tsx`
 
 **Animation not smooth/flickering:**
 - You're probably using CSS animations - switch to `useCurrentFrame()`
