@@ -8,6 +8,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Setup logging - verbose output goes to log file, clean output to screen
+LOG_DIR="$HOME/.langston-setup"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/setup-$(date +%Y%m%d-%H%M%S).log"
+echo "Setup started at $(date)" > "$LOG_FILE"
+
 print_step() {
     echo -e "\n${BLUE}==>${NC} $1"
 }
@@ -24,16 +30,23 @@ print_error() {
     echo -e "${RED}✗${NC} $1"
 }
 
+run_quiet() {
+    "$@" >> "$LOG_FILE" 2>&1
+}
+
 # ============================================================================
 # Langston Videos Workspace Setup
-# ============================================================================
-# This script sets up everything needed to create Remotion videos with OpenCode
 # ============================================================================
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════════╗"
 echo "║         Langston Videos - Workspace Setup                     ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
+echo ""
+echo "This will install everything you need to create videos."
+echo "It may take 5-10 minutes. Just follow the prompts!"
+echo ""
+echo "(Log file: $LOG_FILE)"
 echo ""
 
 WORKSPACE_DIR="$HOME/Documents/code/langston-videos"
@@ -98,8 +111,8 @@ fi
 print_step "Checking for Node.js..."
 
 if ! command -v node &>/dev/null; then
-    print_warning "Node.js not found. Installing..."
-    brew install node
+    print_warning "Node.js not found. Installing (this may take a minute)..."
+    run_quiet brew install node
     print_success "Node.js installed"
 else
     NODE_VERSION=$(node --version)
@@ -114,8 +127,8 @@ print_step "Checking for OpenCode Desktop..."
 if [[ -d "/Applications/OpenCode.app" ]]; then
     print_success "OpenCode Desktop already installed"
 else
-    print_warning "OpenCode Desktop not found. Installing..."
-    brew install --cask opencode-desktop
+    print_warning "OpenCode Desktop not found. Installing (this may take a minute)..."
+    run_quiet brew install --cask opencode-desktop
     print_success "OpenCode Desktop installed"
 fi
 
@@ -126,14 +139,11 @@ print_step "Creating workspace directory..."
 
 mkdir -p "$HOME/Documents/code"
 
+WORKSPACE_EXISTS=false
 if [[ -d "$WORKSPACE_DIR" ]]; then
+    WORKSPACE_EXISTS=true
     print_warning "Workspace already exists at $WORKSPACE_DIR"
-    read -p "Do you want to continue and update the config files? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Setup cancelled."
-        exit 0
-    fi
+    print_success "Skipping template download to preserve your changes"
 else
     mkdir -p "$WORKSPACE_DIR"
     print_success "Created $WORKSPACE_DIR"
@@ -142,40 +152,44 @@ fi
 # ----------------------------------------------------------------------------
 # Step 7: Download workspace template (skills, config, AGENTS.md)
 # ----------------------------------------------------------------------------
-print_step "Downloading workspace template..."
+if [[ "$WORKSPACE_EXISTS" == false ]]; then
+    print_step "Downloading workspace template..."
 
-TEMP_DIR=$(mktemp -d)
-cd "$TEMP_DIR"
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
 
-# Clone the setup repo
-git clone --depth 1 "$SETUP_REPO_URL" setup-repo 2>/dev/null || {
-    print_error "Failed to download setup files. Check your internet connection."
-    exit 1
-}
+    run_quiet git clone --depth 1 "$SETUP_REPO_URL" setup-repo || {
+        print_error "Failed to download setup files. Check your internet connection."
+        print_error "Log file: $LOG_FILE"
+        exit 1
+    }
 
-# Copy workspace files
-cp -r setup-repo/workspace/. "$WORKSPACE_DIR/"
-print_success "Workspace template installed"
+    cp -r setup-repo/workspace/. "$WORKSPACE_DIR/"
+    print_success "Workspace template installed"
 
-# Cleanup
-rm -rf "$TEMP_DIR"
+    rm -rf "$TEMP_DIR"
+else
+    print_step "Skipping template download (workspace exists)"
+    print_success "Your existing files are preserved"
+fi
 
 # ----------------------------------------------------------------------------
 # Step 8: Install Remotion project dependencies
 # ----------------------------------------------------------------------------
 print_step "Installing Remotion project dependencies..."
 
-cd "$WORKSPACE_DIR/my-video"
-
-if [[ -d "node_modules" ]]; then
-    print_warning "Dependencies already installed, skipping"
+if [[ ! -d "$WORKSPACE_DIR/my-video" ]]; then
+    print_warning "No my-video project found. Skipping dependency install."
+    print_warning "Create a new Remotion project with: cd $WORKSPACE_DIR && npx create-video@latest my-video"
+elif [[ -d "$WORKSPACE_DIR/my-video/node_modules" ]]; then
+    print_success "Dependencies already installed"
 else
-    echo "Installing packages (this may take a minute)..."
-    npm install
+    cd "$WORKSPACE_DIR/my-video"
+    print_warning "Installing packages (this may take a minute)..."
+    run_quiet npm install
     print_success "Remotion project ready"
+    cd "$WORKSPACE_DIR"
 fi
-
-cd "$WORKSPACE_DIR"
 
 # ----------------------------------------------------------------------------
 # Step 9: Initialize git for version control
@@ -187,9 +201,9 @@ cd "$WORKSPACE_DIR"
 if [[ -d ".git" ]]; then
     print_success "Git already initialized"
 else
-    git init
-    git add -A
-    git commit -m "Initial setup: Langston Videos workspace"
+    run_quiet git init
+    run_quiet git add -A
+    run_quiet git commit -m "Initial setup: Langston Videos workspace"
     print_success "Git initialized with initial commit"
 fi
 
@@ -230,33 +244,46 @@ fi
 # ----------------------------------------------------------------------------
 # Done!
 # ----------------------------------------------------------------------------
+
+echo "Setup completed at $(date)" >> "$LOG_FILE"
+
+clear
 echo ""
 echo "╔═══════════════════════════════════════════════════════════════╗"
-echo "║                     Setup Complete!                           ║"
+echo "║              ${GREEN}Setup Complete!${NC}                                 ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 echo ""
-echo "Your workspace is ready at:"
-echo "  ${GREEN}$WORKSPACE_DIR${NC}"
+echo "Everything is installed and ready to go!"
 echo ""
-echo "Next steps:"
-echo "  1. Open ${BLUE}OpenCode Desktop${NC} (it's in your Applications folder)"
-echo "  2. Click 'Open Folder' and select:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "${BLUE}WHAT TO DO NEXT:${NC}"
+echo ""
+echo "  ${GREEN}1.${NC} Open the ${BLUE}OpenCode${NC} app"
+echo "     (A Finder window just opened - you can also find it in Applications)"
+echo ""
+echo "  ${GREEN}2.${NC} In OpenCode, click ${YELLOW}'Open Folder'${NC} and choose:"
 echo "     ${YELLOW}Documents → code → langston-videos${NC}"
-echo "  3. When prompted for an API key, paste the one Neil gave you"
-echo "  4. Start creating videos! Try typing:"
-echo "     ${YELLOW}\"Create a simple 5-second intro video with the text 'Hello World'\"${NC}"
 echo ""
-echo "To preview your video:"
-echo "  1. In OpenCode, ask: \"Start the Remotion preview server\""
-echo "  2. Open the URL it shows you (usually http://localhost:3000)"
+echo "  ${GREEN}3.${NC} When asked for an API key, paste the one Neil gave you"
+echo ""
+echo "  ${GREEN}4.${NC} Start creating! Try asking:"
+echo "     ${YELLOW}\"Create a 5-second video that says Hello World\"${NC}"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "${BLUE}NEED HELP?${NC}"
+echo "  • Ask Neil for help"
+echo "  • Share this log file if troubleshooting: ${YELLOW}$LOG_FILE${NC}"
 echo ""
 
-# Open the workspace folder in Finder
 open "$WORKSPACE_DIR"
 
-# Optionally launch OpenCode Desktop
-read -p "Would you like to open OpenCode Desktop now? (y/n) " -n 1 -r
+read -p "Open OpenCode now? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     open -a "OpenCode"
+    echo ""
+    echo "OpenCode is opening! Follow the steps above to get started."
 fi
+echo ""
