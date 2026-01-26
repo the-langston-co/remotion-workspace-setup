@@ -6,6 +6,33 @@ You are helping create animated videos using **Remotion** - a React framework fo
 
 This workspace is for creating marketing videos, social media content, and animated presentations for Langston.
 
+## Session Start (DO THIS FIRST)
+
+**At the start of every session**, before doing anything else:
+
+1. **Check if the dev server is running:**
+   ```bash
+   lsof -i :3000
+   ```
+
+2. **If NOT running, start it:**
+   ```bash
+   npm run dev > /dev/null 2>&1 &
+   sleep 3
+   ```
+
+3. **Verify it started:**
+   ```bash
+   lsof -i :3000
+   ```
+
+4. **Tell the user:**
+   - If started: "Remotion Studio is running at http://localhost:3000 - you can open this in your browser to preview videos."
+   - If already running: "Remotion Studio is already running at http://localhost:3000"
+   - If failed: Check the troubleshooting section and help them fix it.
+
+**Then** greet the user and ask what they'd like to create or work on.
+
 ## Key Concepts
 
 - **Remotion** turns React code into videos
@@ -30,27 +57,13 @@ langston-videos/
 └── .opencode/skill/       # Remotion best practices
 ```
 
-## Dev Server Management
+## Dev Server Reference
 
-**IMPORTANT:** Before making any video changes, ensure the Remotion dev server is running.
+The dev server is auto-started at session begin (see above). These commands are for manual control:
 
-### Auto-start behavior
-When the user asks to create, edit, or preview a video:
-1. Check if the dev server is running: `lsof -i :3000`
-2. If not running, start it: `npm run dev &`
-3. Wait a few seconds for it to start, then proceed
-4. Tell the user the preview is available at http://localhost:3000
-
-### Starting manually
-```bash
-npm run dev
-```
-Opens Remotion Studio at http://localhost:3000
-
-### Stopping the server
-```bash
-lsof -ti :3000 | xargs kill -9
-```
+**Start:** `npm run dev`
+**Stop:** `lsof -ti :3000 | xargs kill -9`
+**Check if running:** `lsof -i :3000`
 
 ## Common Tasks
 
