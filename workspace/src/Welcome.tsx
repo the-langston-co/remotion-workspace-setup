@@ -364,22 +364,27 @@ const WORKFLOW_STEPS: WorkflowStep[] = [
   {
     icon: "opencode",
     title: "Launch OpenCode",
-    description: "Open the app and select your project folder",
+    description: "Open the app and select your project",
   },
   {
     icon: "💬",
     title: "Describe Your Idea",
-    description: "Be specific: duration, style, colors, text",
+    description: "Duration, style, colors, text content",
+  },
+  {
+    icon: "✨",
+    title: "Be Specific",
+    description: '"Make it pop" → "Add a spring animation"',
   },
   {
     icon: "🖼️",
     title: "Add Images",
-    description: "Drop files into public/ folder to use them",
+    description: "Drop files into public/ folder",
   },
   {
     icon: "🔄",
     title: "Iterate",
-    description: "Preview, refine, repeat until perfect",
+    description: "Preview, refine, repeat",
   },
 ];
 
@@ -460,8 +465,8 @@ const WorkflowScene = ({ title }: { title: string }) => {
                 transform: `translateY(${stepY}px) scale(${stepScale})`,
                 background: "rgba(255,255,255,0.15)",
                 borderRadius: 20,
-                padding: 32,
-                width: 320,
+                padding: 28,
+                width: 280,
                 textAlign: "center",
                 backdropFilter: "blur(10px)",
                 border: "1px solid rgba(255,255,255,0.2)",
