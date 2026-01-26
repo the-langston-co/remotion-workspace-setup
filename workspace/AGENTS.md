@@ -80,8 +80,8 @@ langston-videos/
 │   ├── Root.tsx           # All compositions registered here
 │   ├── HelloWorld.tsx     # Example video component
 │   └── (new videos...)    # Add new video components here
-├── public/                # Images, audio, fonts go here
-└── .opencode/skill/       # Remotion best practices
+├── public/                # Images, audio, fonts (including generated music)
+└── .opencode/skill/       # Skills: remotion-best-practices, beatoven-audio
 ```
 
 ## Dev Server Reference
@@ -185,6 +185,17 @@ This skill contains detailed guides for:
 - And much more
 
 **Always refer to the skill documentation** when implementing Remotion features.
+
+### AI Music Generation (Beatoven.ai)
+
+For generating custom background music, load the `beatoven-audio` skill:
+```
+/skill beatoven-audio
+```
+
+**Before using:** Requires `BEATOVEN_API_TOKEN` environment variable. The skill will guide setup if not configured.
+
+**Credit awareness:** We have limited credits (50). Always confirm with the user before generating new tracks — suggest reusing existing audio in `public/` when appropriate.
 
 ## Critical Rules for Remotion Development
 

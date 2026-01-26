@@ -1,20 +1,18 @@
 import {
-  AbsoluteFill,
-  Img,
-  interpolate,
-  spring,
-  staticFile,
-  useCurrentFrame,
-  useVideoConfig,
-  Easing,
+    AbsoluteFill,
+    Easing,
+    Html5Audio,
+    Img,
+    interpolate,
+    spring,
+    staticFile,
+    useCurrentFrame,
+    useVideoConfig,
 } from "remotion";
-import {
-  TransitionSeries,
-  linearTiming,
-} from "@remotion/transitions";
-import { fade } from "@remotion/transitions/fade";
-import { slide } from "@remotion/transitions/slide";
-import { z } from "zod";
+import {linearTiming, TransitionSeries,} from "@remotion/transitions";
+import {fade} from "@remotion/transitions/fade";
+import {slide} from "@remotion/transitions/slide";
+import {z} from "zod";
 
 const FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
@@ -73,9 +71,40 @@ type SceneProps = {
   items?: string[];
   gradient: keyof typeof GRADIENTS;
   emoji?: string;
+  showLogo?: "hero" | "footer" | "none";
 };
 
-const Scene = ({ title, subtitle, items, gradient, emoji }: SceneProps) => {
+/**
+ * Small logo footer for branding on non-hero slides
+ */
+const LogoFooter = () => {
+  const frame = useCurrentFrame();
+  const opacity = interpolate(frame, [20, 40], [0, 0.7], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: 40,
+        right: 50,
+        opacity,
+      }}
+    >
+      <Img
+        src={staticFile("langston-logo-full.png")}
+        style={{
+          height: 32,
+          width: "auto",
+        }}
+      />
+    </div>
+  );
+};
+
+const Scene = ({ title, subtitle, items, gradient, emoji, showLogo = "none" }: SceneProps) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -102,7 +131,24 @@ const Scene = ({ title, subtitle, items, gradient, emoji }: SceneProps) => {
       }}
     >
       <div style={{ textAlign: "center", maxWidth: 1200 }}>
-        {emoji && (
+        {showLogo === "hero" && (
+          <div
+            style={{
+              opacity: titleOpacity,
+              transform: `scale(${titleSpring})`,
+              marginBottom: 50,
+            }}
+          >
+            <Img
+              src={staticFile("langston-logo-full.png")}
+              style={{
+                height: 80,
+                width: "auto",
+              }}
+            />
+          </div>
+        )}
+        {emoji && showLogo !== "hero" && (
           <div
             style={{
               opacity: titleOpacity,
@@ -183,6 +229,7 @@ const Scene = ({ title, subtitle, items, gradient, emoji }: SceneProps) => {
           </div>
         )}
       </div>
+      {showLogo === "footer" && <LogoFooter />}
     </AbsoluteFill>
   );
 };
@@ -191,9 +238,10 @@ type TypewriterSceneProps = {
   intro: string;
   text: string;
   response: string;
+  showFooter?: boolean;
 };
 
-const TypewriterScene = ({ intro, text, response }: TypewriterSceneProps) => {
+const TypewriterScene = ({ intro, text, response, showFooter = false }: TypewriterSceneProps) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -350,6 +398,7 @@ const TypewriterScene = ({ intro, text, response }: TypewriterSceneProps) => {
           </div>
         </div>
       </div>
+      {showFooter && <LogoFooter />}
     </AbsoluteFill>
   );
 };
@@ -388,7 +437,7 @@ const WORKFLOW_STEPS: WorkflowStep[] = [
   },
 ];
 
-const WorkflowScene = ({ title }: { title: string }) => {
+const WorkflowScene = ({ title, showFooter = false }: { title: string; showFooter?: boolean }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -519,24 +568,47 @@ const WorkflowScene = ({ title }: { title: string }) => {
           );
         })}
       </div>
+      {showFooter && <LogoFooter />}
     </AbsoluteFill>
   );
 };
 
 export const Welcome = (props: WelcomeProps) => {
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
   const sceneDuration = Math.round(props.sceneDurationSec * fps);
   const transitionDuration = Math.round(props.transitionDurationSec * fps);
 
+  // Calculate scene durations
+  const scene1 = sceneDuration;
+  const scene2 = sceneDuration + 30;
+  const scene3 = sceneDuration + 120;
+  const scene4 = sceneDuration + 60;
+  // TransitionSeries overlaps transitions, so total = sum of scenes - (numTransitions * transitionDuration)
+  const usedFrames = scene1 + scene2 + scene3 + scene4 - 3 * transitionDuration;
+  // Last scene fills remaining frames (minus the final transition overlap)
+  const scene5 = durationInFrames - usedFrames + transitionDuration;
+
   return (
-    <TransitionSeries>
-      <TransitionSeries.Sequence name="Welcome" durationInFrames={sceneDuration}>
+    <>
+      <Html5Audio
+        src={staticFile("corporate_Ascent_10.mp3")}
+        playbackRate={25 / 26}
+        // volume={(f) =>
+        //   interpolate(f, [0, 30, 780 - 45, 780], [0, 0.3, 0.3, 0], {
+        //     extrapolateLeft: "clamp",
+        //     extrapolateRight: "clamp",
+        //   })
+        // }
+          volume={0.3}
+      />
+      <TransitionSeries>
+      <TransitionSeries.Sequence name="Welcome" durationInFrames={scene1}>
         <Scene
-          emoji={props.welcomeEmoji}
           title={props.welcomeTitle}
           subtitle={props.welcomeSubtitle}
           gradient="primary"
+          showLogo="hero"
         />
       </TransitionSeries.Sequence>
 
@@ -545,7 +617,7 @@ export const Welcome = (props: WelcomeProps) => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence name="Setup Complete" durationInFrames={sceneDuration + 30}>
+      <TransitionSeries.Sequence name="Setup Complete" durationInFrames={scene2}>
         <Scene
           emoji={props.setupEmoji}
           title={props.setupTitle}
@@ -556,6 +628,7 @@ export const Welcome = (props: WelcomeProps) => {
             "Inline styles for reliable rendering",
             "Ready-to-use templates",
           ]}
+          showLogo="footer"
         />
       </TransitionSeries.Sequence>
 
@@ -564,11 +637,12 @@ export const Welcome = (props: WelcomeProps) => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence name="How It Works" durationInFrames={sceneDuration + 120}>
+      <TransitionSeries.Sequence name="How It Works" durationInFrames={scene3}>
         <TypewriterScene
           intro={props.howItWorksIntro}
           text={props.typewriterText}
           response={props.aiResponse}
+          showFooter
         />
       </TransitionSeries.Sequence>
 
@@ -577,8 +651,8 @@ export const Welcome = (props: WelcomeProps) => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence name="Your Workflow" durationInFrames={sceneDuration + 60}>
-        <WorkflowScene title={props.workflowTitle} />
+      <TransitionSeries.Sequence name="Your Workflow" durationInFrames={scene4}>
+        <WorkflowScene title={props.workflowTitle} showFooter />
       </TransitionSeries.Sequence>
 
       <TransitionSeries.Transition
@@ -586,14 +660,16 @@ export const Welcome = (props: WelcomeProps) => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence name="Call to Action" durationInFrames={sceneDuration}>
+      <TransitionSeries.Sequence name="Call to Action" durationInFrames={scene5}>
         <Scene
           emoji={props.ctaEmoji}
           title={props.ctaTitle}
           subtitle={props.ctaSubtitle}
           gradient="energy"
+          showLogo="footer"
         />
       </TransitionSeries.Sequence>
     </TransitionSeries>
+    </>
   );
 };
