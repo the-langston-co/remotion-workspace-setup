@@ -43,25 +43,19 @@ const BRAND_COLORS = {
 
 **At the start of every session**, before doing anything else:
 
-1. **Check if the dev server is running:**
+1. **Check dev server status:**
    ```bash
-   lsof -i :3000
+   pm2 status remotion-studio
    ```
 
-2. **If NOT running, start it:**
+2. **If NOT running (or errored), start/restart it:**
    ```bash
-   npm run dev > /dev/null 2>&1 &
-   sleep 3
+   pm2 start npm --name "remotion-studio" -- run dev 2>/dev/null || pm2 restart remotion-studio
    ```
 
-3. **Verify it started:**
-   ```bash
-   lsof -i :3000
-   ```
-
-4. **Tell the user:**
-   - If started: "Remotion Studio is running at http://localhost:3000 - you can open this in your browser to preview videos."
-   - If already running: "Remotion Studio is already running at http://localhost:3000"
+3. **Tell the user:**
+   - If running: "Remotion Studio is running at http://localhost:3000 - you can open this in your browser to preview videos."
+   - If just started: "Started Remotion Studio at http://localhost:3000"
    - If failed: Check the troubleshooting section and help them fix it.
 
 **Then** greet the user and ask what they'd like to create or work on.
@@ -92,11 +86,13 @@ langston-videos/
 
 ## Dev Server Reference
 
-The dev server is auto-started at session begin (see above). These commands are for manual control:
+The dev server runs via pm2 (auto-restarts on crash). Commands:
 
-**Start:** `npm run dev`
-**Stop:** `lsof -ti :3000 | xargs kill -9`
-**Check if running:** `lsof -i :3000`
+**Status:** `pm2 status remotion-studio`
+**Start:** `pm2 start npm --name "remotion-studio" -- run dev`
+**Stop:** `pm2 stop remotion-studio`
+**Restart:** `pm2 restart remotion-studio`
+**Logs:** `pm2 logs remotion-studio --lines 50`
 
 ## Common Tasks
 
@@ -226,7 +222,7 @@ This skill contains detailed guides for:
 
 ### Development Workflow
 
-1. **Restart the dev server** when adding new compositions to `Root.tsx` - hot-reload doesn't pick up composition changes
+1. **Restart the dev server** when adding new compositions to `Root.tsx` - hot-reload doesn't pick up composition changes. Use `pm2 restart remotion-studio`
 2. **Test styling immediately** - confirm basic styling works before building complex animations
 3. **Start with inline styles from the beginning** - don't rely on CSS classes
 4. **Keep `index.css` minimal** - only basic resets, avoid framework imports
@@ -288,17 +284,30 @@ npm install
 
 ### Dev Server Issues
 
-**Port 3000 already in use:**
+**Check server logs for errors:**
 ```bash
-lsof -ti :3000 | xargs kill -9
-npm run dev
+pm2 logs remotion-studio --lines 100
 ```
 
-**Server won't start:**
-1. Check for errors in terminal output
+**Port 3000 already in use:**
+```bash
+pm2 stop remotion-studio
+lsof -ti :3000 | xargs kill -9 2>/dev/null
+pm2 start remotion-studio
+```
+
+**Server keeps crashing:**
+1. Check logs: `pm2 logs remotion-studio --lines 100`
 2. Try deleting node_modules and reinstalling:
 ```bash
+pm2 stop remotion-studio
 rm -rf node_modules && npm install
+pm2 start remotion-studio
+```
+
+**pm2 not found:**
+```bash
+npm install -g pm2
 ```
 
 ### Runtime/Browser Errors

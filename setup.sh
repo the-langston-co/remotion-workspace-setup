@@ -120,7 +120,20 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 5: OpenCode Desktop
+# Step 5: pm2 (process manager for dev server)
+# ----------------------------------------------------------------------------
+print_step "Checking for pm2..."
+
+if command -v pm2 &>/dev/null; then
+    print_success "pm2 already installed"
+else
+    print_warning "pm2 not found. Installing..."
+    run_quiet npm install -g pm2
+    print_success "pm2 installed"
+fi
+
+# ----------------------------------------------------------------------------
+# Step 6: OpenCode Desktop
 # ----------------------------------------------------------------------------
 print_step "Checking for OpenCode Desktop..."
 
@@ -133,7 +146,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 6: Create workspace directory
+# Step 7: Create workspace directory
 # ----------------------------------------------------------------------------
 print_step "Creating workspace directory..."
 
@@ -150,7 +163,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 7: Download workspace template (skills, config, AGENTS.md)
+# Step 8: Download workspace template (skills, config, AGENTS.md)
 # ----------------------------------------------------------------------------
 if [[ "$WORKSPACE_EXISTS" == false ]]; then
     print_step "Downloading workspace template..."
@@ -174,7 +187,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 8: Install Remotion project dependencies
+# Step 9: Install Remotion project dependencies
 # ----------------------------------------------------------------------------
 print_step "Installing Remotion project dependencies..."
 
@@ -191,7 +204,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 9: Initialize git for version control
+# Step 10: Initialize git for version control
 # ----------------------------------------------------------------------------
 print_step "Setting up version control..."
 
@@ -207,7 +220,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 10: Configure Anthropic API key
+# Step 11: Configure Anthropic API key
 # ----------------------------------------------------------------------------
 print_step "Configuring AI assistant..."
 
@@ -241,6 +254,21 @@ EOF
 fi
 
 # ----------------------------------------------------------------------------
+# Step 12: Start dev server with pm2
+# ----------------------------------------------------------------------------
+print_step "Starting Remotion Studio (dev server)..."
+
+cd "$WORKSPACE_DIR"
+
+if pm2 list 2>/dev/null | grep -q "remotion-studio"; then
+    print_success "Remotion Studio already running"
+else
+    run_quiet pm2 start npm --name "remotion-studio" -- run dev
+    run_quiet pm2 save
+    print_success "Remotion Studio started (auto-restarts on crash)"
+fi
+
+# ----------------------------------------------------------------------------
 # Done!
 # ----------------------------------------------------------------------------
 
@@ -267,6 +295,9 @@ echo -e "  ${GREEN}3.${NC} When asked for an API key, paste the one Neil gave yo
 echo ""
 echo -e "  ${GREEN}4.${NC} Start creating! Try asking:"
 echo -e "     ${YELLOW}\"Create a 5-second video that says Hello World\"${NC}"
+echo ""
+echo -e "  ${GREEN}5.${NC} Preview your video at ${YELLOW}http://localhost:3000${NC}"
+echo -e "     (The dev server is already running and will auto-restart)"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
