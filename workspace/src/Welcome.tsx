@@ -12,6 +12,7 @@ import {
 } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
 import { slide } from "@remotion/transitions/slide";
+import { z } from "zod";
 
 const FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
@@ -32,6 +33,37 @@ const GRADIENTS = {
   warm: `linear-gradient(135deg, ${BRAND.burntSienna} 0%, ${BRAND.amaranthPurple} 100%)`,
   energy: `linear-gradient(135deg, ${BRAND.burntSienna} 0%, ${BRAND.naplesYellow} 100%)`,
 };
+
+// Zod schema for configurable props in Remotion Studio
+export const WelcomeSchema = z.object({
+  // Timing (in seconds for easier UI)
+  sceneDurationSec: z.number().min(1).max(15).default(4),
+  transitionDurationSec: z.number().min(0.1).max(2).default(0.5),
+
+  // Scene 1: Welcome
+  welcomeTitle: z.string().default("Welcome to Langston Videos!"),
+  welcomeSubtitle: z.string().default("Your AI-powered video creation studio"),
+  welcomeEmoji: z.string().default("🎬"),
+
+  // Scene 2: Setup Complete
+  setupTitle: z.string().default("You're All Set Up!"),
+  setupEmoji: z.string().default("✅"),
+
+  // Scene 3: How It Works (TypewriterScene)
+  typewriterText: z.string().default("Create a welcome video with animated text"),
+  aiResponse: z.string().default("I'll create that for you! Setting up a new composition with spring animations..."),
+
+  // Scene 4: Tips
+  tipsTitle: z.string().default("Quick Tips"),
+  tipsEmoji: z.string().default("💡"),
+
+  // Scene 5: CTA
+  ctaTitle: z.string().default("Let's Create Something!"),
+  ctaSubtitle: z.string().default("Just ask: 'Create a 10-second promo video for...'"),
+  ctaEmoji: z.string().default("🚀"),
+});
+
+export type WelcomeProps = z.infer<typeof WelcomeSchema>;
 
 type SceneProps = {
   title: string;
@@ -153,11 +185,15 @@ const Scene = ({ title, subtitle, items, gradient, emoji }: SceneProps) => {
   );
 };
 
-const TypewriterScene = () => {
+type TypewriterSceneProps = {
+  text: string;
+  response: string;
+};
+
+const TypewriterScene = ({ text, response }: TypewriterSceneProps) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const text = "Create a welcome video with animated text";
   const charIndex = Math.min(Math.floor(frame / 2), text.length);
   const displayText = text.slice(0, charIndex);
 
@@ -260,8 +296,7 @@ const TypewriterScene = () => {
           }}
         >
           <div style={{ color: "#ffffff", fontSize: 28 }}>
-            <span style={{ color: BRAND.naplesYellow }}>AI:</span> I'll create that for
-            you! Setting up a new composition with spring animations...
+            <span style={{ color: BRAND.naplesYellow }}>AI:</span> {response}
           </div>
         </div>
       </div>
@@ -269,19 +304,19 @@ const TypewriterScene = () => {
   );
 };
 
-export const Welcome = () => {
+export const Welcome = (props: WelcomeProps) => {
   const { fps } = useVideoConfig();
 
-  const sceneDuration = 4 * fps;
-  const transitionDuration = Math.round(0.5 * fps);
+  const sceneDuration = Math.round(props.sceneDurationSec * fps);
+  const transitionDuration = Math.round(props.transitionDurationSec * fps);
 
   return (
     <TransitionSeries>
-      <TransitionSeries.Sequence durationInFrames={sceneDuration}>
+      <TransitionSeries.Sequence name="Welcome" durationInFrames={sceneDuration}>
         <Scene
-          emoji="🎬"
-          title="Welcome to Langston Videos!"
-          subtitle="Your AI-powered video creation studio"
+          emoji={props.welcomeEmoji}
+          title={props.welcomeTitle}
+          subtitle={props.welcomeSubtitle}
           gradient="primary"
         />
       </TransitionSeries.Sequence>
@@ -291,15 +326,15 @@ export const Welcome = () => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence durationInFrames={sceneDuration + 30}>
+      <TransitionSeries.Sequence name="Setup Complete" durationInFrames={sceneDuration + 30}>
         <Scene
-          emoji="✅"
-          title="You're All Set Up!"
+          emoji={props.setupEmoji}
+          title={props.setupTitle}
           gradient="success"
           items={[
             "Remotion Studio for previewing videos",
             "OpenCode AI to help you build",
-            "Tailwind CSS for easy styling",
+            "Inline styles for reliable rendering",
             "Ready-to-use templates",
           ]}
         />
@@ -310,8 +345,11 @@ export const Welcome = () => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence durationInFrames={sceneDuration + 60}>
-        <TypewriterScene />
+      <TransitionSeries.Sequence name="How It Works" durationInFrames={sceneDuration + 60}>
+        <TypewriterScene
+          text={props.typewriterText}
+          response={props.aiResponse}
+        />
       </TransitionSeries.Sequence>
 
       <TransitionSeries.Transition
@@ -319,10 +357,10 @@ export const Welcome = () => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence durationInFrames={sceneDuration + 30}>
+      <TransitionSeries.Sequence name="Tips" durationInFrames={sceneDuration + 30}>
         <Scene
-          emoji="💡"
-          title="Quick Tips"
+          emoji={props.tipsEmoji}
+          title={props.tipsTitle}
           gradient="warm"
           items={[
             "Preview at localhost:3000",
@@ -338,11 +376,11 @@ export const Welcome = () => {
         timing={linearTiming({ durationInFrames: transitionDuration })}
       />
 
-      <TransitionSeries.Sequence durationInFrames={sceneDuration}>
+      <TransitionSeries.Sequence name="Call to Action" durationInFrames={sceneDuration}>
         <Scene
-          emoji="🚀"
-          title="Let's Create Something!"
-          subtitle="Just ask: 'Create a 10-second promo video for...'"
+          emoji={props.ctaEmoji}
+          title={props.ctaTitle}
+          subtitle={props.ctaSubtitle}
           gradient="energy"
         />
       </TransitionSeries.Sequence>

@@ -230,6 +230,40 @@ This skill contains detailed guides for:
 2. **Test styling immediately** - confirm basic styling works before building complex animations
 3. **Start with inline styles from the beginning** - don't rely on CSS classes
 4. **Keep `index.css` minimal** - only basic resets, avoid framework imports
+5. **Name your sequences** - Add `name="Scene Name"` to `TransitionSeries.Sequence` components for labeled timeline UI
+
+### Configurable Props with Zod Schemas
+
+Videos can have configurable props that appear in Remotion Studio's sidebar. This lets users tweak timing, text, and other values without editing code.
+
+```tsx
+import { z } from "zod";
+
+export const MyVideoSchema = z.object({
+  title: z.string().default("My Video"),
+  durationSec: z.number().min(1).max(30).default(5),
+});
+
+export type MyVideoProps = z.infer<typeof MyVideoSchema>;
+
+export const MyVideo = (props: MyVideoProps) => {
+  // Use props.title, props.durationSec, etc.
+};
+```
+
+Register with schema in Root.tsx:
+```tsx
+<Composition
+  id="MyVideo"
+  component={MyVideo}
+  schema={MyVideoSchema}
+  defaultProps={{
+    title: "My Video",
+    durationSec: 5,
+  }}
+  // ...
+/>
+```
 
 ## Troubleshooting
 
