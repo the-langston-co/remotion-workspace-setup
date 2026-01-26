@@ -275,16 +275,9 @@ echo "  • Ask Neil for help"
 echo -e "  • Share this log file if troubleshooting: ${YELLOW}$LOG_FILE${NC}"
 echo ""
 
-read -p "Open OpenCode now? (y/n) " -n 1 -r < /dev/tty
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    open "$WORKSPACE_DIR"
-    open -a "OpenCode"
-    echo ""
-    echo "OpenCode is opening! Follow the steps above to get started."
-else
-    open "$WORKSPACE_DIR"
-    echo ""
-    echo "Finder opened to your workspace. Open OpenCode when you're ready!"
-fi
+open "$WORKSPACE_DIR"
+open -a "OpenCode"
+echo ""
+echo "Opening Finder and OpenCode..."
+echo "Follow the steps above to get started!"
 echo ""
