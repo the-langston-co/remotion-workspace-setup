@@ -72,9 +72,60 @@
       text-align: center;
     }
     
+    .toolbar {
+      background: #222;
+      border-bottom: 1px solid #333;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 36px;
+    }
+    
+    .toolbar-title {
+      color: #888;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .toolbar-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .toolbar-btn {
+      background: #333;
+      border: 1px solid #444;
+      color: #ccc;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s;
+    }
+    
+    .toolbar-btn:hover {
+      background: #444;
+      color: #fff;
+    }
+    
+    .toolbar-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+    
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    
     .container {
       display: flex;
-      height: 100vh;
+      flex: 1;
       width: 100vw;
     }
     
@@ -148,6 +199,171 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+    
+    .modal-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .modal {
+      background: #252525;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      transform: scale(0.95);
+      transition: transform 0.2s;
+    }
+    
+    .modal-overlay.visible .modal {
+      transform: scale(1);
+    }
+    
+    .modal-header {
+      background: #2a2a2a;
+      padding: 16px 20px;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .modal-title {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .modal-close {
+      background: none;
+      border: none;
+      color: #666;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    
+    .modal-close:hover {
+      background: #333;
+      color: #fff;
+    }
+    
+    .modal-body {
+      padding: 24px;
+      color: #ccc;
+      overflow-y: auto;
+      max-height: calc(80vh - 130px);
+    }
+    
+    .modal-body h3 {
+      color: #fff;
+      font-size: 15px;
+      margin: 20px 0 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .modal-body h3:first-child {
+      margin-top: 0;
+    }
+    
+    .modal-body p {
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    
+    .modal-body ul {
+      margin: 0 0 12px 20px;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+    
+    .modal-body code {
+      background: #333;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+    }
+    
+    .modal-body .tip {
+      background: #1e3a5f;
+      border-left: 3px solid #3b82f6;
+      padding: 12px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 16px 0;
+    }
+    
+    .modal-body .tip-title {
+      color: #60a5fa;
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    
+    .modal-footer {
+      padding: 16px 20px;
+      border-top: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .modal-footer label {
+      color: #888;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    
+    .modal-footer input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    
+    .btn-primary {
+      background: #3b82f6;
+      border: none;
+      color: #fff;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+    
+    .emoji {
+      font-size: 18px;
+    }
   </style>
 </head>
 <body>
@@ -160,31 +376,95 @@
     <div class="setup-error" id="setup-error" style="display: none;"></div>
   </div>
 
-  <div class="container">
-    <div class="panel" id="opencode-panel">
-      <div class="panel-header">
-        <span class="status-dot" id="opencode-status"></span>
-        OpenCode
+  <div class="modal-overlay" id="welcome-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Welcome to Langston Studio</span>
+        <button class="modal-close" id="modal-close">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
       </div>
-      <div class="loading" id="opencode-loading">
-        <div class="spinner"></div>
-        <span>Starting OpenCode...</span>
+      <div class="modal-body">
+        <h3><span class="emoji">🎬</span> What is this?</h3>
+        <p>Langston Studio is your all-in-one environment for creating videos with AI. The left panel is <strong>OpenCode</strong> (your AI coding assistant), and the right panel is <strong>Remotion</strong> (your video preview).</p>
+        
+        <h3><span class="emoji">📂</span> Getting started</h3>
+        <p>First, open <code>~/Documents/code/langston-videos</code> as a new project in OpenCode. This is where your project lives and has already been set up for you.</p>
+        
+        <h3><span class="emoji">💬</span> How to create videos</h3>
+        <p>Once your project is open, just describe what you want in the OpenCode chat. Try saying:</p>
+        <ul>
+          <li>"Create a 10-second intro video with the text 'Hello World'"</li>
+          <li>"Add a fade-in animation to the title"</li>
+          <li>"Change the background to a gradient"</li>
+          <li>"Add background music"</li>
+        </ul>
+        
+        <h3><span class="emoji">👀</span> Previewing your video</h3>
+        <p>The Remotion panel on the right updates automatically as you make changes. Use the playback controls at the bottom to scrub through your video timeline.</p>
+        
+        <h3><span class="emoji">📦</span> Rendering your video</h3>
+        <p>When you're happy with your video, ask OpenCode: <code>"Render the video as an MP4"</code></p>
+        <p>The file will be saved to your project folder.</p>
+        
+        <div class="tip">
+          <div class="tip-title">Pro Tip</div>
+          <p style="margin: 0;">Drag the divider between panels to resize them. You can also click the <strong>Help</strong> button in the toolbar anytime to see this guide again.</p>
+        </div>
       </div>
-      <iframe id="opencode-frame" style="display: none;"></iframe>
+      <div class="modal-footer">
+        <label>
+          <input type="checkbox" id="dont-show-again">
+          Don't show this again
+        </label>
+        <button class="btn-primary" id="get-started-btn">Get Started</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <div class="toolbar">
+      <span class="toolbar-title">Langston Studio</span>
+      <div class="toolbar-actions">
+        <button class="toolbar-btn" id="help-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <path d="M12 17h.01"/>
+          </svg>
+          Help
+        </button>
+      </div>
     </div>
     
-    <div class="divider" id="divider"></div>
-    
-    <div class="panel" id="remotion-panel">
-      <div class="panel-header">
-        <span class="status-dot" id="remotion-status"></span>
-        Remotion Preview
+    <div class="container">
+      <div class="panel" id="opencode-panel">
+        <div class="panel-header">
+          <span class="status-dot" id="opencode-status"></span>
+          OpenCode
+        </div>
+        <div class="loading" id="opencode-loading">
+          <div class="spinner"></div>
+          <span>Starting OpenCode...</span>
+        </div>
+        <iframe id="opencode-frame" style="display: none;"></iframe>
       </div>
-      <div class="loading" id="remotion-loading">
-        <div class="spinner"></div>
-        <span>Starting Remotion...</span>
+      
+      <div class="divider" id="divider"></div>
+      
+      <div class="panel" id="remotion-panel">
+        <div class="panel-header">
+          <span class="status-dot" id="remotion-status"></span>
+          Remotion Preview
+        </div>
+        <div class="loading" id="remotion-loading">
+          <div class="spinner"></div>
+          <span>Starting Remotion...</span>
+        </div>
+        <iframe id="remotion-frame" style="display: none;"></iframe>
       </div>
-      <iframe id="remotion-frame" style="display: none;"></iframe>
     </div>
   </div>
   
@@ -193,11 +473,51 @@
     
     const OPENCODE_URL = 'http://localhost:3001';
     const REMOTION_URL = 'http://localhost:3000';
+    const WELCOME_DISMISSED_KEY = 'langston-studio-welcome-dismissed';
     
     const setupOverlay = document.getElementById('setup-overlay');
     const setupStatus = document.getElementById('setup-status');
     const progressFill = document.getElementById('progress-fill');
     const setupError = document.getElementById('setup-error');
+    const welcomeModal = document.getElementById('welcome-modal');
+    const modalClose = document.getElementById('modal-close');
+    const helpBtn = document.getElementById('help-btn');
+    const getStartedBtn = document.getElementById('get-started-btn');
+    const dontShowAgain = document.getElementById('dont-show-again');
+    
+    function showWelcomeModal() {
+      welcomeModal.classList.add('visible');
+    }
+    
+    function hideWelcomeModal() {
+      welcomeModal.classList.remove('visible');
+      if (dontShowAgain.checked) {
+        localStorage.setItem(WELCOME_DISMISSED_KEY, 'true');
+      }
+    }
+    
+    function shouldShowWelcome() {
+      return localStorage.getItem(WELCOME_DISMISSED_KEY) !== 'true';
+    }
+    
+    modalClose.addEventListener('click', hideWelcomeModal);
+    getStartedBtn.addEventListener('click', hideWelcomeModal);
+    helpBtn.addEventListener('click', () => {
+      dontShowAgain.checked = false;
+      showWelcomeModal();
+    });
+    
+    welcomeModal.addEventListener('click', (e) => {
+      if (e.target === welcomeModal) {
+        hideWelcomeModal();
+      }
+    });
+    
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && welcomeModal.classList.contains('visible')) {
+        hideWelcomeModal();
+      }
+    });
     
     listen('setup-status', (event) => {
       const { status, progress } = event.payload;
@@ -211,6 +531,9 @@
       setTimeout(() => {
         setupOverlay.classList.add('hidden');
         startWaitingForServers();
+        if (shouldShowWelcome()) {
+          setTimeout(showWelcomeModal, 500);
+        }
       }, 500);
     });
     
@@ -281,7 +604,6 @@
       );
     }
     
-    // Resizable divider
     const divider = document.getElementById('divider');
     const leftPanel = document.getElementById('opencode-panel');
     const rightPanel = document.getElementById('remotion-panel');
