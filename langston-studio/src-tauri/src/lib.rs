@@ -134,13 +134,11 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
 }
 
 fn spawn_opencode(workspace: &PathBuf) -> Option<Child> {
-    log::info!("Starting OpenCode web server at {:?}", workspace);
+    log::info!("Starting OpenCode server at {:?}", workspace);
 
     Command::new("opencode")
-        .args(["web", "--port", "3001"])
+        .args(["serve", "--port", "3001"])
         .current_dir(workspace)
-        .env("BROWSER", "/usr/bin/true")
-        .env("OPENCODE_NO_OPEN", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -180,24 +178,29 @@ pub fn run() {
 
             let app_handle = app.handle().clone();
 
-            std::thread::spawn(move || match setup_workspace(&app_handle) {
-                Ok(_) => {
-                    log::info!("Workspace setup complete");
-                    let _ = app_handle.emit("setup-complete", ());
+            std::thread::spawn(move || {
+                // Wait for webview to initialize and register event listeners
+                std::thread::sleep(std::time::Duration::from_millis(500));
 
-                    let workspace = get_workspace_dir();
-                    let opencode_process = spawn_opencode(&workspace);
-                    let remotion_process = spawn_remotion(&workspace);
+                match setup_workspace(&app_handle) {
+                    Ok(_) => {
+                        log::info!("Workspace setup complete");
+                        let _ = app_handle.emit("setup-complete", ());
 
-                    if let Some(state) = app_handle.try_state::<Mutex<ServerProcesses>>() {
-                        let mut guard = state.lock().unwrap();
-                        guard.opencode = opencode_process;
-                        guard.remotion = remotion_process;
+                        let workspace = get_workspace_dir();
+                        let opencode_process = spawn_opencode(&workspace);
+                        let remotion_process = spawn_remotion(&workspace);
+
+                        if let Some(state) = app_handle.try_state::<Mutex<ServerProcesses>>() {
+                            let mut guard = state.lock().unwrap();
+                            guard.opencode = opencode_process;
+                            guard.remotion = remotion_process;
+                        }
                     }
-                }
-                Err(e) => {
-                    log::error!("Workspace setup failed: {}", e);
-                    let _ = app_handle.emit("setup-error", e);
+                    Err(e) => {
+                        log::error!("Workspace setup failed: {}", e);
+                        let _ = app_handle.emit("setup-error", e);
+                    }
                 }
             });
 

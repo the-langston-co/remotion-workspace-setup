@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Langston Studio</title>
-  <script src="https://unpkg.com/@tauri-apps/api@2/dist/index.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -189,8 +188,8 @@
     </div>
   </div>
   
-  <script type="module">
-    const { listen } = window.__TAURI__.event;
+  <script>
+    const { event: { listen } } = window.__TAURI__;
     
     const OPENCODE_URL = 'http://localhost:3001';
     const REMOTION_URL = 'http://localhost:3000';
@@ -235,6 +234,14 @@
       let attempts = 0;
       const maxAttempts = 60;
       
+      frameEl.onerror = (e) => {
+        console.error(`${name} iframe error:`, e);
+      };
+      
+      frameEl.onload = () => {
+        console.log(`${name} iframe loaded successfully`);
+      };
+      
       while (attempts < maxAttempts) {
         const ready = await checkServer(url);
         if (ready) {
@@ -242,7 +249,7 @@
           loadingEl.style.display = 'none';
           frameEl.style.display = 'block';
           frameEl.src = url;
-          console.log(`${name} ready at ${url}`);
+          console.log(`${name} ready at ${url}, setting iframe src`);
           return;
         }
         await new Promise(r => setTimeout(r, 1000));
@@ -253,6 +260,10 @@
     }
     
     function startWaitingForServers() {
+      console.log('Starting server checks...');
+      console.log('OpenCode URL:', OPENCODE_URL);
+      console.log('Remotion URL:', REMOTION_URL);
+      
       waitForServer(
         OPENCODE_URL,
         document.getElementById('opencode-status'),
