@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Langston Studio",
-  "version": "0.1.0",
+  "version": "0.3.6",
   "identifier": "co.langston.studio",
   "build": {
     "frontendDist": "../dist",
@@ -21,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-src http://localhost:*; connect-src http://localhost:* https://*"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.sentry-cdn.com; style-src 'self' 'unsafe-inline'; frame-src http://localhost:*; connect-src http://localhost:* https://*.ingest.us.sentry.io https://*"
     }
   },
   "bundle": {

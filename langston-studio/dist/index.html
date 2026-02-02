@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Langston Studio</title>
+  <script
+    src="https://js.sentry-cdn.com/3a30fa628bbd0e5f55d9d25f394076c0.min.js"
+    crossorigin="anonymous"
+    async
+  ></script>
   <style>
     * {
       margin: 0;
@@ -72,6 +77,30 @@
       text-align: center;
     }
     
+    .setup-logs-btn {
+      margin-top: 30px;
+      background: transparent;
+      border: 1px solid #444;
+      color: #888;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .setup-logs-btn:hover {
+      background: #333;
+      color: #fff;
+      border-color: #555;
+    }
+    
+    .setup-version {
+      color: #555;
+      font-size: 12px;
+      margin-bottom: 30px;
+    }
+    
     .toolbar {
       background: #222;
       border-bottom: 1px solid #333;
@@ -86,6 +115,18 @@
       color: #888;
       font-size: 13px;
       font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .version-badge {
+      background: #333;
+      color: #666;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 400;
     }
     
     .toolbar-actions {
@@ -364,16 +405,117 @@
     .emoji {
       font-size: 18px;
     }
+    
+    .logs-content {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 400px;
+      overflow-y: auto;
+      color: #aaa;
+    }
+    
+    .logs-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    
+    .btn-secondary {
+      background: #333;
+      border: 1px solid #444;
+      color: #ccc;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .btn-secondary:hover {
+      background: #444;
+      color: #fff;
+    }
+    
+    .btn-secondary svg {
+      width: 14px;
+      height: 14px;
+    }
+    
+    .copy-success {
+      color: #22c55e;
+      font-size: 12px;
+      margin-left: 8px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    
+    .copy-success.visible {
+      opacity: 1;
+    }
+    
+    .log-path {
+      color: #666;
+      font-size: 11px;
+      margin-bottom: 12px;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
   </style>
 </head>
 <body>
   <div class="setup-overlay" id="setup-overlay">
     <div class="setup-logo">Langston Studio</div>
+    <div class="setup-version" id="setup-version">v...</div>
     <div class="setup-status" id="setup-status">Initializing...</div>
     <div class="progress-bar">
       <div class="progress-fill" id="progress-fill"></div>
     </div>
     <div class="setup-error" id="setup-error" style="display: none;"></div>
+    <button class="setup-logs-btn" id="setup-logs-btn">View Logs</button>
+  </div>
+
+  <div class="modal-overlay" id="logs-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Session Logs</span>
+        <button class="modal-close" id="logs-modal-close">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Share these logs with a developer to help troubleshoot issues.</p>
+        <div class="log-path" id="log-path"></div>
+        <div class="log-version" id="log-version" style="color: #666; font-size: 11px; margin-bottom: 8px;"></div>
+        <div class="logs-content" id="logs-content">Loading...</div>
+        <div class="logs-actions">
+          <button class="btn-secondary" id="copy-logs-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy to Clipboard
+          </button>
+          <button class="btn-secondary" id="open-logs-folder-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            Open Logs Folder
+          </button>
+          <span class="copy-success" id="copy-success">Copied!</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="modal-overlay" id="welcome-modal">
@@ -426,8 +568,18 @@
 
   <div class="app-container">
     <div class="toolbar">
-      <span class="toolbar-title">Langston Studio</span>
+      <span class="toolbar-title">Langston Studio <span class="version-badge" id="version-badge">v...</span></span>
       <div class="toolbar-actions">
+        <button class="toolbar-btn" id="logs-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          Logs
+        </button>
         <button class="toolbar-btn" id="help-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
@@ -469,10 +621,42 @@
   </div>
   
   <script>
-    const { event: { listen } } = window.__TAURI__;
+    function waitForTauri() {
+      console.log('[init] waitForTauri called');
+      return new Promise((resolve, reject) => {
+        if (window.__TAURI__ && window.__TAURI__.core) {
+          console.log('[init] Tauri already available');
+          resolve();
+        } else {
+          let attempts = 0;
+          const maxAttempts = 100; // 5 seconds max
+          const check = setInterval(() => {
+            attempts++;
+            if (window.__TAURI__ && window.__TAURI__.core) {
+              console.log('[init] Tauri became available after', attempts * 50, 'ms');
+              clearInterval(check);
+              resolve();
+            } else if (attempts >= maxAttempts) {
+              console.error('[init] Tauri not available after 5 seconds');
+              clearInterval(check);
+              reject(new Error('Tauri API not available after 5 seconds'));
+            }
+          }, 50);
+        }
+      });
+    }
     
-    const OPENCODE_URL = 'http://localhost:3001';
-    const REMOTION_URL = 'http://localhost:3000';
+    async function initApp() {
+      console.log('[init] initApp starting');
+      await waitForTauri();
+      console.log('[init] Tauri ready, setting up app');
+      
+      const { event: { listen } } = window.__TAURI__;
+      const { invoke } = window.__TAURI__.core;
+      console.log('[init] Got listen and invoke from Tauri');
+    
+    const OPENCODE_URL = 'http://localhost:7501';
+    const REMOTION_URL = 'http://localhost:7500';
     const WELCOME_DISMISSED_KEY = 'langston-studio-welcome-dismissed';
     
     const setupOverlay = document.getElementById('setup-overlay');
@@ -484,6 +668,42 @@
     const helpBtn = document.getElementById('help-btn');
     const getStartedBtn = document.getElementById('get-started-btn');
     const dontShowAgain = document.getElementById('dont-show-again');
+    
+    const logsModal = document.getElementById('logs-modal');
+    const logsModalClose = document.getElementById('logs-modal-close');
+    const logsBtn = document.getElementById('logs-btn');
+    const logsContent = document.getElementById('logs-content');
+    const logPath = document.getElementById('log-path');
+    const copyLogsBtn = document.getElementById('copy-logs-btn');
+    const openLogsFolderBtn = document.getElementById('open-logs-folder-btn');
+    const copySuccess = document.getElementById('copy-success');
+    const versionBadge = document.getElementById('version-badge');
+    const setupLogsBtn = document.getElementById('setup-logs-btn');
+    const setupVersion = document.getElementById('setup-version');
+    const logVersion = document.getElementById('log-version');
+    
+    let appVersion = '?';
+    const LOGS_DIR = '~/Library/Logs/Langston Studio';
+    
+    setupLogsBtn.addEventListener('click', showLogsModal);
+    
+    invoke('get_version').then(v => {
+      appVersion = v;
+      versionBadge.textContent = 'v' + v;
+      setupVersion.textContent = 'v' + v;
+      logVersion.textContent = 'Version: ' + v;
+      if (window.Sentry) {
+        Sentry.setTag('app_version', v);
+      }
+    }).catch(() => {
+      versionBadge.textContent = 'v?';
+      setupVersion.textContent = 'v?';
+    });
+    
+    if (window.Sentry) {
+      Sentry.setTag('platform', 'macos');
+      Sentry.setTag('component', 'frontend');
+    }
     
     function showWelcomeModal() {
       welcomeModal.classList.add('visible');
@@ -514,18 +734,81 @@
     });
     
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && welcomeModal.classList.contains('visible')) {
-        hideWelcomeModal();
+      if (e.key === 'Escape') {
+        if (welcomeModal.classList.contains('visible')) {
+          hideWelcomeModal();
+        }
+        if (logsModal.classList.contains('visible')) {
+          hideLogsModal();
+        }
       }
     });
     
+    async function showLogsModal() {
+      logsModal.classList.add('visible');
+      logsContent.textContent = 'Loading...';
+      logVersion.textContent = 'Version: ' + appVersion;
+      try {
+        const [logs, path] = await Promise.all([
+          invoke('get_logs'),
+          invoke('get_log_file_path')
+        ]);
+        logsContent.textContent = logs;
+        logPath.textContent = path;
+        logsContent.scrollTop = logsContent.scrollHeight;
+      } catch (e) {
+        logsContent.textContent = 'Error loading logs: ' + e + '\n\nLogs are stored in:\n' + LOGS_DIR + '\n\nOpen Finder and press Cmd+Shift+G, then paste the path above.';
+        logPath.textContent = LOGS_DIR;
+      }
+    }
+    
+    function hideLogsModal() {
+      logsModal.classList.remove('visible');
+    }
+    
+    logsBtn.addEventListener('click', showLogsModal);
+    logsModalClose.addEventListener('click', hideLogsModal);
+    logsModal.addEventListener('click', (e) => {
+      if (e.target === logsModal) hideLogsModal();
+    });
+    
+    copyLogsBtn.addEventListener('click', async () => {
+      try {
+        const textToCopy = 'Version: ' + appVersion + '\n\n' + logsContent.textContent;
+        await navigator.clipboard.writeText(textToCopy);
+        copySuccess.classList.add('visible');
+        copySuccess.textContent = 'Copied!';
+        setTimeout(() => copySuccess.classList.remove('visible'), 2000);
+      } catch (e) {
+        copySuccess.classList.add('visible');
+        copySuccess.style.color = '#ef4444';
+        copySuccess.textContent = 'Copy failed - select text manually';
+        setTimeout(() => {
+          copySuccess.classList.remove('visible');
+          copySuccess.style.color = '#22c55e';
+        }, 3000);
+      }
+    });
+    
+    openLogsFolderBtn.addEventListener('click', async () => {
+      try {
+        await invoke('open_logs_folder');
+      } catch (e) {
+        alert('Could not open logs folder automatically.\n\nOpen Finder, press Cmd+Shift+G, and go to:\n\n~/Library/Logs/Langston Studio');
+      }
+    });
+    
+    console.log('[init] Registering Tauri event listeners');
+    
     listen('setup-status', (event) => {
+      console.log('[event] setup-status:', event.payload);
       const { status, progress } = event.payload;
       setupStatus.textContent = status;
       progressFill.style.width = `${progress}%`;
     });
     
     listen('setup-complete', () => {
+      console.log('[event] setup-complete received!');
       setupStatus.textContent = 'Starting servers...';
       progressFill.style.width = '100%';
       setTimeout(() => {
@@ -538,11 +821,14 @@
     });
     
     listen('setup-error', (event) => {
+      console.log('[event] setup-error:', event.payload);
       setupStatus.textContent = 'Setup failed';
       setupError.textContent = event.payload;
       setupError.style.display = 'block';
       progressFill.style.background = '#ef4444';
     });
+    
+    console.log('[init] Event listeners registered, app ready');
     
     async function checkServer(url) {
       try {
@@ -644,6 +930,20 @@
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         setIframePointerEvents(true);
+      }
+    });
+    
+    }
+    
+    initApp().catch(e => {
+      console.error('Failed to init app:', e);
+      // Show error in UI
+      const status = document.getElementById('setup-status');
+      const error = document.getElementById('setup-error');
+      if (status) status.textContent = 'App initialization failed';
+      if (error) {
+        error.textContent = 'Error: ' + e.message + '. Check browser console for details.';
+        error.style.display = 'block';
       }
     });
   </script>
