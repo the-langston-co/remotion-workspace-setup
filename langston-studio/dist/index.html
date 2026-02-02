@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Langston Studio</title>
+  <script src="https://unpkg.com/@tauri-apps/api@2/dist/index.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+    }
+    
+    .setup-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      color: #fff;
+    }
+    
+    .setup-overlay.hidden {
+      display: none;
+    }
+    
+    .setup-logo {
+      font-size: 32px;
+      font-weight: 600;
+      margin-bottom: 40px;
+      color: #fff;
+    }
+    
+    .setup-status {
+      font-size: 16px;
+      color: #888;
+      margin-bottom: 20px;
+    }
+    
+    .progress-bar {
+      width: 300px;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: #3b82f6;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+    
+    .setup-error {
+      color: #ef4444;
+      margin-top: 20px;
+      max-width: 400px;
+      text-align: center;
+    }
+    
+    .container {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+    
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #333;
+    }
+    
+    .panel-header {
+      background: #2a2a2a;
+      color: #888;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+    }
+    
+    .status-dot.ready {
+      background: #22c55e;
+    }
+    
+    .panel iframe {
+      flex: 1;
+      border: none;
+      background: #111;
+    }
+    
+    .divider {
+      width: 4px;
+      background: #333;
+      cursor: col-resize;
+    }
+    
+    .divider:hover {
+      background: #555;
+    }
+    
+    .loading {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      gap: 12px;
+    }
+    
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #333;
+      border-top-color: #666;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="setup-overlay" id="setup-overlay">
+    <div class="setup-logo">Langston Studio</div>
+    <div class="setup-status" id="setup-status">Initializing...</div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="setup-error" id="setup-error" style="display: none;"></div>
+  </div>
+
+  <div class="container">
+    <div class="panel" id="opencode-panel">
+      <div class="panel-header">
+        <span class="status-dot" id="opencode-status"></span>
+        OpenCode
+      </div>
+      <div class="loading" id="opencode-loading">
+        <div class="spinner"></div>
+        <span>Starting OpenCode...</span>
+      </div>
+      <iframe id="opencode-frame" style="display: none;"></iframe>
+    </div>
+    
+    <div class="divider" id="divider"></div>
+    
+    <div class="panel" id="remotion-panel">
+      <div class="panel-header">
+        <span class="status-dot" id="remotion-status"></span>
+        Remotion Preview
+      </div>
+      <div class="loading" id="remotion-loading">
+        <div class="spinner"></div>
+        <span>Starting Remotion...</span>
+      </div>
+      <iframe id="remotion-frame" style="display: none;"></iframe>
+    </div>
+  </div>
+  
+  <script type="module">
+    const { listen } = window.__TAURI__.event;
+    
+    const OPENCODE_URL = 'http://localhost:3001';
+    const REMOTION_URL = 'http://localhost:3000';
+    
+    const setupOverlay = document.getElementById('setup-overlay');
+    const setupStatus = document.getElementById('setup-status');
+    const progressFill = document.getElementById('progress-fill');
+    const setupError = document.getElementById('setup-error');
+    
+    listen('setup-status', (event) => {
+      const { status, progress } = event.payload;
+      setupStatus.textContent = status;
+      progressFill.style.width = `${progress}%`;
+    });
+    
+    listen('setup-complete', () => {
+      setupStatus.textContent = 'Starting servers...';
+      progressFill.style.width = '100%';
+      setTimeout(() => {
+        setupOverlay.classList.add('hidden');
+        startWaitingForServers();
+      }, 500);
+    });
+    
+    listen('setup-error', (event) => {
+      setupStatus.textContent = 'Setup failed';
+      setupError.textContent = event.payload;
+      setupError.style.display = 'block';
+      progressFill.style.background = '#ef4444';
+    });
+    
+    async function checkServer(url) {
+      try {
+        const response = await fetch(url, { mode: 'no-cors' });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    
+    async function waitForServer(url, statusEl, loadingEl, frameEl, name) {
+      let attempts = 0;
+      const maxAttempts = 60;
+      
+      while (attempts < maxAttempts) {
+        const ready = await checkServer(url);
+        if (ready) {
+          statusEl.classList.add('ready');
+          loadingEl.style.display = 'none';
+          frameEl.style.display = 'block';
+          frameEl.src = url;
+          console.log(`${name} ready at ${url}`);
+          return;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+        attempts++;
+      }
+      
+      loadingEl.querySelector('span').textContent = `Failed to connect to ${name}`;
+    }
+    
+    function startWaitingForServers() {
+      waitForServer(
+        OPENCODE_URL,
+        document.getElementById('opencode-status'),
+        document.getElementById('opencode-loading'),
+        document.getElementById('opencode-frame'),
+        'OpenCode'
+      );
+      
+      waitForServer(
+        REMOTION_URL,
+        document.getElementById('remotion-status'),
+        document.getElementById('remotion-loading'),
+        document.getElementById('remotion-frame'),
+        'Remotion'
+      );
+    }
+    
+    // Resizable divider
+    const divider = document.getElementById('divider');
+    const leftPanel = document.getElementById('opencode-panel');
+    const rightPanel = document.getElementById('remotion-panel');
+    const opencodeFrame = document.getElementById('opencode-frame');
+    const remotionFrame = document.getElementById('remotion-frame');
+    
+    let isDragging = false;
+    
+    function setIframePointerEvents(enabled) {
+      const value = enabled ? 'auto' : 'none';
+      opencodeFrame.style.pointerEvents = value;
+      remotionFrame.style.pointerEvents = value;
+    }
+    
+    divider.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      setIframePointerEvents(false);
+      e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      
+      const containerWidth = document.querySelector('.container').offsetWidth;
+      const percentage = (e.clientX / containerWidth) * 100;
+      
+      if (percentage > 20 && percentage < 80) {
+        leftPanel.style.flex = `0 0 ${percentage}%`;
+        rightPanel.style.flex = `0 0 ${100 - percentage}%`;
+      }
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setIframePointerEvents(true);
+      }
+    });
+  </script>
+</body>
+</html>
