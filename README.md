@@ -18,7 +18,9 @@ Then press **Enter** and follow the prompts.
 |------|---------|
 | Xcode Command Line Tools | Developer tools (includes git) |
 | Homebrew | Package manager for macOS |
+| Git LFS | Required for downloading images and audio |
 | Node.js | JavaScript runtime (required for Remotion) |
+| pm2 | Keeps the dev server running |
 | OpenCode Desktop | AI coding assistant |
 
 ## What Gets Created
@@ -72,6 +74,12 @@ xcode-select --install
 
 ### OpenCode can't find the project
 Make sure you opened the `langston-videos` folder, not `my-video` or `Documents`.
+
+### Images or audio are corrupted / won't load
+Run this in Terminal to re-download the assets:
+```bash
+curl -fsSL https://raw.githubusercontent.com/the-langston-co/remotion-workspace-setup/main/fix-assets.sh | bash
+```
 
 ### Need help?
 Ask Neil or describe your issue to the AI assistant - it can often diagnose problems.

@@ -106,7 +106,23 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 4: Node.js
+# Step 4: Git LFS (required for downloading binary assets)
+# ----------------------------------------------------------------------------
+print_step "Checking for Git LFS..."
+
+if command -v git-lfs &>/dev/null; then
+    print_success "Git LFS already installed"
+else
+    print_warning "Git LFS not found. Installing..."
+    run_quiet brew install git-lfs
+    print_success "Git LFS installed"
+fi
+
+# Initialize Git LFS for this user (idempotent)
+run_quiet git lfs install
+
+# ----------------------------------------------------------------------------
+# Step 5: Node.js
 # ----------------------------------------------------------------------------
 print_step "Checking for Node.js..."
 
@@ -120,7 +136,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 5: pm2 (process manager for dev server)
+# Step 6: pm2 (process manager for dev server)
 # ----------------------------------------------------------------------------
 print_step "Checking for pm2..."
 
@@ -133,7 +149,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 6: OpenCode Desktop
+# Step 7: OpenCode Desktop
 # ----------------------------------------------------------------------------
 print_step "Checking for OpenCode Desktop..."
 
@@ -146,7 +162,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 7: Create workspace directory
+# Step 8: Create workspace directory
 # ----------------------------------------------------------------------------
 print_step "Creating workspace directory..."
 
@@ -163,7 +179,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 8: Download workspace template (skills, config, AGENTS.md)
+# Step 9: Download workspace template (skills, config, AGENTS.md)
 # ----------------------------------------------------------------------------
 if [[ "$WORKSPACE_EXISTS" == false ]]; then
     print_step "Downloading workspace template..."
@@ -187,7 +203,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 9: Install Remotion project dependencies
+# Step 10: Install Remotion project dependencies
 # ----------------------------------------------------------------------------
 print_step "Installing Remotion project dependencies..."
 
@@ -204,7 +220,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 10: Initialize git for version control
+# Step 11: Initialize git for version control
 # ----------------------------------------------------------------------------
 print_step "Setting up version control..."
 
@@ -220,7 +236,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# Step 11: Configure Anthropic API key
+# Step 12: Configure Anthropic API key
 # ----------------------------------------------------------------------------
 print_step "Configuring AI assistant..."
 
@@ -254,7 +270,7 @@ EOF
 fi
 
 # ----------------------------------------------------------------------------
-# Step 12: Start dev server with pm2
+# Step 13: Start dev server with pm2
 # ----------------------------------------------------------------------------
 print_step "Starting Remotion Studio (dev server)..."
 
