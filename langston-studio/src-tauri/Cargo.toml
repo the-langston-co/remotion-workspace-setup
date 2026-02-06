@@ -1,6 +1,6 @@
 [package]
 name = "langston-studio"
-version = "0.3.6"
+version = "0.3.7"
 description = "Langston Videos Studio - OpenCode + Remotion"
 authors = ["Langston Co"]
 license = "MIT"

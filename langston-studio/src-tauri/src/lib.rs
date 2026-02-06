@@ -80,9 +80,6 @@ fn get_path_env() -> String {
     let paths = vec![
         format!("{}/.local/bin", home_str),
         format!("{}/.bun/bin", home_str),
-        format!("{}/.nvm/versions/node/v22.14.0/bin", home_str),
-        format!("{}/.nvm/versions/node/v20.18.0/bin", home_str),
-        format!("{}/.nvm/versions/node/v18.20.0/bin", home_str),
         "/opt/homebrew/bin".to_string(),
         "/usr/local/bin".to_string(),
         "/usr/bin".to_string(),
@@ -92,6 +89,34 @@ fn get_path_env() -> String {
     ];
 
     paths.join(":")
+}
+
+fn has_nvm() -> bool {
+    let home = dirs::home_dir().unwrap_or_default();
+    home.join(".nvm/nvm.sh").exists()
+}
+
+/// nvm is a shell function (not a binary), so we source nvm.sh and run through bash.
+/// `nvm install` reads .nvmrc, installs if missing, and activates the version.
+fn run_nvm_command(
+    cmd: &str,
+    work_dir: &PathBuf,
+    path_env: &str,
+) -> Result<std::process::Output, std::io::Error> {
+    let home = dirs::home_dir().unwrap_or_default();
+    let nvm_sh = home.join(".nvm/nvm.sh");
+
+    let script = format!(
+        "source {:?} && nvm install --no-progress >/dev/null 2>&1 && {}",
+        nvm_sh, cmd
+    );
+
+    Command::new("bash")
+        .args(["-c", &script])
+        .current_dir(work_dir)
+        .env("PATH", path_env)
+        .env("NVM_DIR", home.join(".nvm"))
+        .output()
 }
 
 fn create_log_file() -> (PathBuf, File) {
@@ -216,6 +241,48 @@ fn emit_status(app: &AppHandle, status: &str, progress: u8) {
     );
 }
 
+fn log_environment(state: &Mutex<AppState>, path_env: &str) {
+    let nvm_available = has_nvm();
+    write_log(state, "INFO", &format!("Using PATH: {}", path_env));
+    write_log(state, "INFO", &format!("nvm available: {}", nvm_available));
+
+    if nvm_available {
+        let home = dirs::home_dir().unwrap_or_default();
+        let nvm_versions_dir = home.join(".nvm/versions/node");
+        if let Ok(entries) = fs::read_dir(&nvm_versions_dir) {
+            let versions: Vec<String> = entries
+                .flatten()
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect();
+            write_log(
+                state,
+                "INFO",
+                &format!("nvm installed versions: {:?}", versions),
+            );
+        }
+    }
+
+    let node_check = Command::new("bash")
+        .args(["-c", "which node && node --version"])
+        .env("PATH", path_env)
+        .output();
+    match node_check {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if stdout.is_empty() {
+                write_log(
+                    state,
+                    "WARN",
+                    "node not found on system PATH (will use nvm if available)",
+                );
+            } else {
+                write_log(state, "INFO", &format!("System node: {}", stdout.trim()));
+            }
+        }
+        Err(e) => write_log(state, "WARN", &format!("Failed to check node: {}", e)),
+    }
+}
+
 fn setup_workspace(app: &AppHandle) -> Result<(), String> {
     let workspace = get_workspace_dir();
     let path_env = get_path_env();
@@ -226,7 +293,7 @@ fn setup_workspace(app: &AppHandle) -> Result<(), String> {
             "INFO",
             &format!("Checking workspace at {:?}", workspace),
         );
-        write_log(&state, "INFO", &format!("Using PATH: {}", path_env));
+        log_environment(&state, &path_env);
     }
 
     let resource_path = app
@@ -302,17 +369,27 @@ fn setup_workspace(app: &AppHandle) -> Result<(), String> {
         50,
     );
 
+    let use_nvm = has_nvm();
     if let Some(state) = app.try_state::<Mutex<AppState>>() {
-        write_log(&state, "INFO", "Running npm install...");
+        write_log(
+            &state,
+            "INFO",
+            &format!("Running npm install (nvm: {})...", use_nvm),
+        );
     }
 
-    let npm_output = Command::new("npm")
-        .args(["install"])
-        .current_dir(&workspace)
-        .env("PATH", &path_env)
-        .env("npm_config_progress", "false")
-        .output()
-        .map_err(|e| format!("Failed to run npm install: {}", e))?;
+    let npm_output = if use_nvm {
+        run_nvm_command("npm install --no-progress", &workspace, &path_env)
+            .map_err(|e| format!("Failed to run npm install via nvm: {}", e))?
+    } else {
+        Command::new("npm")
+            .args(["install"])
+            .current_dir(&workspace)
+            .env("PATH", &path_env)
+            .env("npm_config_progress", "false")
+            .output()
+            .map_err(|e| format!("Failed to run npm install: {}", e))?
+    };
 
     if let Some(state) = app.try_state::<Mutex<AppState>>() {
         if !npm_output.stdout.is_empty() {
@@ -494,16 +571,46 @@ fn spawn_remotion(app: &AppHandle, workspace: &PathBuf) -> Result<Child, String>
     }
 
     let path_env = get_path_env();
+    let use_nvm = has_nvm();
 
-    match Command::new("npm")
-        .args(["run", "dev"])
-        .current_dir(workspace)
-        .env("PATH", &path_env)
-        .env("BROWSER", "none")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-    {
+    if let Some(state) = app.try_state::<Mutex<AppState>>() {
+        write_log(
+            &state,
+            "INFO",
+            &format!(
+                "Spawning Remotion via {}",
+                if use_nvm { "nvm" } else { "direct npm" }
+            ),
+        );
+    }
+
+    let spawn_result = if use_nvm {
+        let home = dirs::home_dir().unwrap_or_default();
+        let nvm_sh = home.join(".nvm/nvm.sh");
+        let script = format!(
+            "source {:?} && nvm use --silent && BROWSER=none npm run dev",
+            nvm_sh
+        );
+        Command::new("bash")
+            .args(["-c", &script])
+            .current_dir(workspace)
+            .env("PATH", &path_env)
+            .env("NVM_DIR", home.join(".nvm"))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+    } else {
+        Command::new("npm")
+            .args(["run", "dev"])
+            .current_dir(workspace)
+            .env("PATH", &path_env)
+            .env("BROWSER", "none")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+    };
+
+    match spawn_result {
         Ok(child) => {
             if let Some(state) = app.try_state::<Mutex<AppState>>() {
                 write_log(
