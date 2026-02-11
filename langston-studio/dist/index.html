@@ -655,7 +655,10 @@
       const { invoke } = window.__TAURI__.core;
       console.log('[init] Got listen and invoke from Tauri');
     
-    const OPENCODE_URL = 'http://localhost:7501';
+    // OpenCode is proxied through a Rust reverse proxy (port 7502) to prevent
+    // WKWebView from killing idle streaming connections after ~60-120s.
+    // The actual OpenCode server runs on 7501.
+    const OPENCODE_URL = 'http://localhost:7502';
     const REMOTION_URL = 'http://localhost:7500';
     const WELCOME_DISMISSED_KEY = 'langston-studio-welcome-dismissed';
     
@@ -844,11 +847,14 @@
       const maxAttempts = 60;
       
       frameEl.onerror = (e) => {
-        console.error(`${name} iframe error:`, e);
+        console.error(`[${name}] iframe onerror event:`, e);
+        if (window.Sentry) {
+          Sentry.captureMessage(`${name} iframe onerror: ${e?.message || e}`, 'error');
+        }
       };
       
       frameEl.onload = () => {
-        console.log(`${name} iframe loaded successfully`);
+        console.log(`[${name}] iframe onload fired (src: ${frameEl.src})`);
       };
       
       while (attempts < maxAttempts) {
@@ -866,6 +872,126 @@
       }
       
       loadingEl.querySelector('span').textContent = `Failed to connect to ${name}`;
+    }
+    
+    // -----------------------------------------------------------
+    // Iframe crash detection & auto-recovery
+    // -----------------------------------------------------------
+    // WKWebView runs iframe content in a separate WebContent process.
+    // Under memory pressure or during large streaming responses the
+    // process can crash, leaving the iframe completely blank. There's
+    // no DOM event for this — we detect it by polling: if the iframe
+    // is visible but its contentDocument/contentWindow becomes null
+    // (cross-origin so we expect a DOMException) AND a basic fetch to
+    // the server succeeds, the iframe crashed and we reload it.
+    
+    function monitorIframe(frameEl, url, name) {
+      let blankSince = null;
+      let recoveryCount = 0;
+      let lastHealthLog = 0;
+      const RECOVERY_DELAY_MS = 2000; // wait 2s before declaring crash
+      const HEALTH_LOG_INTERVAL_MS = 30000; // log health every 30s
+      
+      setInterval(async () => {
+        // Only monitor if the iframe is supposed to be showing content
+        if (frameEl.style.display === 'none' || !frameEl.src) return;
+        
+        const now = Date.now();
+        
+        // Periodic health check — ping the proxy and log latency
+        if (now - lastHealthLog > HEALTH_LOG_INTERVAL_MS) {
+          lastHealthLog = now;
+          const healthStart = performance.now();
+          try {
+            await fetch(url, { mode: 'no-cors', cache: 'no-store' });
+            const latency = (performance.now() - healthStart).toFixed(0);
+            console.log(`[monitor] ${name} health OK (${latency}ms)`);
+          } catch (e) {
+            const latency = (performance.now() - healthStart).toFixed(0);
+            console.error(`[monitor] ${name} health FAILED after ${latency}ms:`, e.message);
+            if (window.Sentry) {
+              Sentry.captureMessage(`${name} health check failed: ${e.message}`, 'warning');
+            }
+          }
+        }
+        
+        // Try to detect a blank/crashed iframe.
+        // For cross-origin iframes, accessing contentDocument throws.
+        // If contentWindow is outright null, the process died.
+        let looksBlank = false;
+        let blankReason = '';
+        try {
+          if (frameEl.contentWindow === null) {
+            looksBlank = true;
+            blankReason = 'contentWindow is null';
+          } else {
+            // Try to read *something* — for cross-origin this throws
+            // DOMException which is expected (iframe is alive).
+            // If it returns null without throwing, it's dead.
+            const doc = frameEl.contentDocument;
+            if (doc === null) {
+              // Cross-origin: expected, iframe is fine
+              looksBlank = false;
+            } else if (doc && !doc.body) {
+              looksBlank = true;
+              blankReason = 'contentDocument has no body';
+            } else if (doc && doc.body && doc.body.innerHTML === '') {
+              looksBlank = true;
+              blankReason = 'body innerHTML is empty';
+            }
+          }
+        } catch (e) {
+          // DOMException from cross-origin access = iframe is alive
+          looksBlank = false;
+        }
+        
+        if (!looksBlank) {
+          blankSince = null;
+          return;
+        }
+        
+        if (!blankSince) {
+          blankSince = now;
+          console.warn(`[monitor] ${name} iframe appears blank (${blankReason}), watching...`);
+          return;
+        }
+        
+        const blankDuration = now - blankSince;
+        
+        // Only act if it's been blank for RECOVERY_DELAY_MS
+        if (blankDuration < RECOVERY_DELAY_MS) return;
+        
+        // Verify the server is still up before reloading
+        const healthStart = performance.now();
+        const serverUp = await checkServer(url);
+        const healthLatency = (performance.now() - healthStart).toFixed(0);
+        
+        if (!serverUp) {
+          console.warn(`[monitor] ${name} iframe blank for ${blankDuration}ms but server is DOWN (check took ${healthLatency}ms)`);
+          return;
+        }
+        
+        recoveryCount++;
+        console.warn(
+          `[monitor] ${name} iframe CRASH DETECTED — blank for ${blankDuration}ms, reason: ${blankReason}, ` +
+          `server responded in ${healthLatency}ms, recovery #${recoveryCount}`
+        );
+        if (window.Sentry) {
+          Sentry.captureMessage(
+            `${name} iframe crash #${recoveryCount}: blank ${blankDuration}ms, reason: ${blankReason}`,
+            'warning'
+          );
+        }
+        
+        // Force reload by clearing and re-setting src
+        const currentSrc = frameEl.src;
+        frameEl.src = 'about:blank';
+        setTimeout(() => {
+          frameEl.src = currentSrc;
+          blankSince = null;
+          console.log(`[monitor] ${name} iframe reloaded (recovery #${recoveryCount})`);
+        }, 500);
+      }, 1500); // Poll every 1.5s
     }
     
     function startWaitingForServers() {
@@ -888,6 +1014,13 @@
         document.getElementById('remotion-frame'),
         'Remotion'
       );
+      
+      // NOTE: Iframe crash monitor (monitorIframe) is intentionally disabled.
+      // The cross-origin iframe detection was producing false positives —
+      // OpenCode's React re-renders during large streaming responses caused
+      // momentary blank DOMs that triggered reloads, which killed active
+      // sessions ("Failed to send prompt"). The proxy alone handles the
+      // underlying WKWebView timeout issue.
     }
     
     const divider = document.getElementById('divider');

@@ -1,3 +1,5 @@
+mod proxy;
+
 use chrono::Local;
 use sentry::IntoDsn;
 use serde::Deserialize;
@@ -78,6 +80,7 @@ fn get_path_env() -> String {
     let home_str = home.to_string_lossy();
 
     let paths = vec![
+        format!("{}/.opencode/bin", home_str),
         format!("{}/.local/bin", home_str),
         format!("{}/.bun/bin", home_str),
         "/opt/homebrew/bin".to_string(),
@@ -117,6 +120,42 @@ fn run_nvm_command(
         .env("PATH", path_env)
         .env("NVM_DIR", home.join(".nvm"))
         .output()
+}
+
+fn find_opencode(path_env: &str) -> Option<PathBuf> {
+    let output = Command::new("bash")
+        .args(["-c", "which opencode"])
+        .env("PATH", path_env)
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+    None
+}
+
+fn install_opencode(state: &Mutex<AppState>, path_env: &str) -> Result<(), String> {
+    write_log(state, "INFO", "opencode CLI not found, installing...");
+
+    let output = Command::new("bash")
+        .args(["-c", "curl -fsSL https://opencode.ai/install | bash"])
+        .env("PATH", path_env)
+        .output()
+        .map_err(|e| format!("Failed to run opencode installer: {}", e))?;
+
+    if output.status.success() {
+        write_log(state, "INFO", "opencode CLI installed successfully");
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let err = format!("opencode install failed: {}", stderr);
+        write_log(state, "ERROR", &err);
+        Err(err)
+    }
 }
 
 fn create_log_file() -> (PathBuf, File) {
@@ -161,6 +200,10 @@ fn get_workspace_dir() -> PathBuf {
 }
 
 const OPENCODE_PORT: u16 = 7501;
+/// Port the reverse proxy listens on — the iframe connects here instead of
+/// directly to OpenCode. The proxy forwards to OPENCODE_PORT with long
+/// read timeouts to prevent WKWebView from killing idle streaming connections.
+const OPENCODE_PROXY_PORT: u16 = 7502;
 const REMOTION_PORT: u16 = 7500;
 
 fn check_port_available(port: u16) -> bool {
@@ -309,6 +352,7 @@ fn setup_workspace(app: &AppHandle) -> Result<(), String> {
 
         emit_status(app, "Cleaning up old processes...", 20);
         kill_port(OPENCODE_PORT);
+        kill_port(OPENCODE_PROXY_PORT);
         kill_port(REMOTION_PORT);
 
         emit_status(app, "Saving progress...", 40);
@@ -510,6 +554,21 @@ fn spawn_opencode(
     }
 
     let path_env = get_path_env();
+
+    if find_opencode(&path_env).is_none() {
+        if let Some(state) = app.try_state::<Mutex<AppState>>() {
+            install_opencode(&state, &path_env)?;
+        }
+        if find_opencode(&path_env).is_none() {
+            return Err("opencode CLI not found after install attempt".to_string());
+        }
+    }
+
+    if let Some(state) = app.try_state::<Mutex<AppState>>() {
+        if let Some(path) = find_opencode(&path_env) {
+            write_log(&state, "INFO", &format!("opencode binary: {:?}", path));
+        }
+    }
 
     let mut cmd = Command::new("opencode");
     cmd.args(["serve", "--port", &OPENCODE_PORT.to_string()])
@@ -772,15 +831,58 @@ pub fn run() {
                         let remotion_result = spawn_remotion(&app_handle, &workspace);
 
                         match (&opencode_result, &remotion_result) {
-                            (Ok(_), Ok(_)) => {
-                                let _ = app_handle.emit("setup-complete", ());
-                            }
+                            (Ok(_), Ok(_)) => {}
                             (Err(e), _) | (_, Err(e)) => {
                                 sentry::capture_message(e, sentry::Level::Error);
                                 let _ = app_handle.emit("setup-error", e.clone());
                                 return;
                             }
                         }
+
+                        // Start the reverse proxy that sits between the webview
+                        // and OpenCode, preventing WKWebView timeout kills on
+                        // long-running streaming responses.
+                        if let Some(state) = app_handle.try_state::<Mutex<AppState>>() {
+                            write_log(
+                                &state,
+                                "INFO",
+                                &format!(
+                                    "Starting reverse proxy on port {} -> {}",
+                                    OPENCODE_PROXY_PORT, OPENCODE_PORT
+                                ),
+                            );
+                        }
+
+                        // Clean up proxy port before binding
+                        kill_port(OPENCODE_PROXY_PORT);
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+
+                        // Get the log file path so the proxy can write to the same file
+                        let proxy_log_path = app_handle
+                            .try_state::<Mutex<AppState>>()
+                            .and_then(|state| {
+                                state.lock().ok().map(|g| g.log_file_path.clone())
+                            })
+                            .unwrap_or_else(|| get_logs_dir().join("proxy.log"));
+
+                        let proxy_handle = app_handle.clone();
+                        std::thread::spawn(move || {
+                            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for proxy");
+                            rt.block_on(async {
+                                if let Err(e) = proxy::run_proxy(OPENCODE_PROXY_PORT, OPENCODE_PORT, proxy_log_path).await {
+                                    log::error!("Proxy exited with error: {}", e);
+                                    if let Some(state) = proxy_handle.try_state::<Mutex<AppState>>() {
+                                        write_log(
+                                            &state,
+                                            "ERROR",
+                                            &format!("Reverse proxy failed: {}", e),
+                                        );
+                                    }
+                                }
+                            });
+                        });
+
+                        let _ = app_handle.emit("setup-complete", ());
 
                         if let Some(state) = app_handle.try_state::<Mutex<AppState>>() {
                             let mut guard = state.lock().unwrap();
@@ -818,11 +920,11 @@ pub fn run() {
                         let _ = child.kill();
                     }
                     
-                    write_log(&state, "INFO", &format!("Cleaning up ports {}, {}...", REMOTION_PORT, OPENCODE_PORT));
+                    write_log(&state, "INFO", &format!("Cleaning up ports {}, {}, {}...", REMOTION_PORT, OPENCODE_PORT, OPENCODE_PROXY_PORT));
                     
                     // Spawn cleanup without blocking - use spawn() not status()
                     let _ = Command::new("sh")
-                        .args(["-c", &format!("sleep 0.5 && lsof -ti:{},{} 2>/dev/null | xargs kill -9 2>/dev/null", OPENCODE_PORT, REMOTION_PORT)])
+                        .args(["-c", &format!("sleep 0.5 && lsof -ti:{},{},{} 2>/dev/null | xargs kill -9 2>/dev/null", OPENCODE_PORT, OPENCODE_PROXY_PORT, REMOTION_PORT)])
                         .spawn();
                 }
             }

@@ -1,6 +1,6 @@
 [package]
 name = "langston-studio"
-version = "0.3.7"
+version = "0.3.13"
 description = "Langston Videos Studio - OpenCode + Remotion"
 authors = ["Langston Co"]
 license = "MIT"
@@ -25,3 +25,10 @@ tauri = { version = "2.9.5", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 dirs = "5"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["stream"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "http1"] }
+http-body-util = "0.1"
+bytes = "1"
+futures-util = "0.3"
