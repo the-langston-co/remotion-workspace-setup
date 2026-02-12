@@ -2,6 +2,10 @@
 
 You are helping create animated videos using **Remotion** - a React framework for creating videos programmatically.
 
+> **CRITICAL: The Remotion dev server runs on port 7500, NOT the default 3000.**
+> Never tell the user to open localhost:3000. The preview is already visible in the right panel of Langston Studio.
+> Do NOT start, stop, or restart the dev server — the app manages it automatically.
+
 ## What This Workspace Is For
 
 This workspace is for creating marketing videos, social media content, and animated presentations for Langston.
@@ -43,20 +47,11 @@ const BRAND_COLORS = {
 
 **At the start of every session**, before doing anything else:
 
-1. **Check dev server status:**
-   ```bash
-   pm2 status remotion-studio
-   ```
+1. **The Remotion dev server is already running** — Langston Studio manages it automatically on port **7500**.
+   - Do NOT try to start/stop the server yourself. No `pm2`, no `npm run dev`.
+   - The preview is visible in the right panel of the app.
 
-2. **If NOT running (or errored), start/restart it:**
-   ```bash
-   pm2 start npm --name "remotion-studio" -- run dev 2>/dev/null || pm2 restart remotion-studio
-   ```
-
-3. **Tell the user:**
-   - If running: "Remotion Studio is running at http://localhost:3000 - you can open this in your browser to preview videos."
-   - If just started: "Started Remotion Studio at http://localhost:3000"
-   - If failed: Check the troubleshooting section and help them fix it.
+2. **If the user reports the preview is broken**, suggest they restart the app. The dev server lifecycle is handled by the Tauri shell.
 
 **Then** greet the user and ask what they'd like to create or work on.
 
@@ -86,13 +81,10 @@ langston-videos/
 
 ## Dev Server Reference
 
-The dev server runs via pm2 (auto-restarts on crash). Commands:
-
-**Status:** `pm2 status remotion-studio`
-**Start:** `pm2 start npm --name "remotion-studio" -- run dev`
-**Stop:** `pm2 stop remotion-studio`
-**Restart:** `pm2 restart remotion-studio`
-**Logs:** `pm2 logs remotion-studio --lines 50`
+The Remotion dev server runs on **port 7500**, managed by Langston Studio (Tauri).
+- Do NOT use `pm2` or start the server manually — the app handles this.
+- The port is configured in `remotion.config.ts` via `Config.setStudioPort(7500)`.
+- To restart, the user should restart Langston Studio.
 
 ## Common Tasks
 
@@ -233,7 +225,7 @@ For generating custom background music, load the `beatoven-audio` skill:
 
 ### Development Workflow
 
-1. **Restart the dev server** when adding new compositions to `Root.tsx` - hot-reload doesn't pick up composition changes. Use `pm2 restart remotion-studio`
+1. **New compositions require a server restart** to appear in the sidebar - hot-reload doesn't pick up composition changes. Tell the user to restart Langston Studio.
 2. **Test styling immediately** - confirm basic styling works before building complex animations
 3. **Start with inline styles from the beginning** - don't rely on CSS classes
 4. **Keep `index.css` minimal** - only basic resets, avoid framework imports
@@ -295,30 +287,15 @@ npm install
 
 ### Dev Server Issues
 
-**Check server logs for errors:**
-```bash
-pm2 logs remotion-studio --lines 100
-```
+The dev server runs on **port 7500** and is managed by Langston Studio.
 
-**Port 3000 already in use:**
-```bash
-pm2 stop remotion-studio
-lsof -ti :3000 | xargs kill -9 2>/dev/null
-pm2 start remotion-studio
-```
+**Port 7500 conflict or server not loading:**
+- Restart Langston Studio (the app manages the server lifecycle).
 
-**Server keeps crashing:**
-1. Check logs: `pm2 logs remotion-studio --lines 100`
-2. Try deleting node_modules and reinstalling:
+**If you need to debug manually:**
 ```bash
-pm2 stop remotion-studio
-rm -rf node_modules && npm install
-pm2 start remotion-studio
-```
-
-**pm2 not found:**
-```bash
-npm install -g pm2
+lsof -ti :7500 | xargs kill -9 2>/dev/null
+npm run dev
 ```
 
 ### Runtime/Browser Errors

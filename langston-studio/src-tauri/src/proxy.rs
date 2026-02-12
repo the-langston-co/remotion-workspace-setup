@@ -37,6 +37,102 @@ const UPSTREAM_READ_TIMEOUT: Duration = Duration::from_secs(600);
 /// Monotonic request counter for correlating log lines.
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+/// JavaScript injected into every HTML response from upstream.
+/// Overrides `window.fetch` for mutating HTTP methods (POST, PUT, PATCH, DELETE)
+/// so those requests are relayed via `postMessage` to the parent Tauri webview.
+/// The parent executes them through Rust's reqwest with a 10-minute timeout,
+/// completely bypassing WKWebView's ~60s idle connection kill.
+///
+/// GET/HEAD/OPTIONS requests continue through native fetch (they're fast and
+/// don't trigger the timeout issue).
+const FETCH_OVERRIDE_SCRIPT: &str = r#"
+(function() {
+  var _origFetch = window.fetch;
+  var _pending = {};
+
+  window.addEventListener('message', function(e) {
+    if (!e.data || !e.data.id) return;
+    if (e.data.type === 'tauri-fetch-response' && _pending[e.data.id]) {
+      _pending[e.data.id].resolve(e.data);
+      delete _pending[e.data.id];
+    }
+    if (e.data.type === 'tauri-fetch-error' && _pending[e.data.id]) {
+      _pending[e.data.id].reject(new Error(e.data.error));
+      delete _pending[e.data.id];
+    }
+  });
+
+  window.fetch = function(input, init) {
+    var method = (init && init.method) ? init.method.toUpperCase() : 'GET';
+    // Only intercept mutating methods — these are the ones that can block
+    // for minutes while the LLM processes. GETs are fast or use SSE (streaming).
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+      return _origFetch.call(window, input, init);
+    }
+
+    // If we're not in an iframe (no parent), fall back to native fetch
+    if (window === window.parent) {
+      return _origFetch.call(window, input, init);
+    }
+
+    var url = typeof input === 'string' ? input : (input && input.url ? input.url : String(input));
+    // Make relative URLs absolute
+    if (url.startsWith('/')) {
+      url = window.location.origin + url;
+    }
+
+    var id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    var headers = {};
+    if (init && init.headers) {
+      try {
+        var h = new Headers(init.headers);
+        h.forEach(function(v, k) { headers[k] = v; });
+      } catch(ex) {
+        // If headers aren't iterable, skip
+      }
+    }
+
+    var body = (init && init.body) ? init.body : null;
+    // Convert body to string if it's not already
+    if (body && typeof body !== 'string') {
+      try { body = JSON.stringify(body); } catch(ex) { body = String(body); }
+    }
+
+    console.log('[tauri-fetch] Relaying ' + method + ' ' + url + ' via postMessage (id: ' + id + ')');
+
+    return new Promise(function(resolve, reject) {
+      _pending[id] = { resolve: resolve, reject: reject };
+
+      window.parent.postMessage({
+        type: 'tauri-fetch',
+        id: id,
+        method: method,
+        url: url,
+        body: body,
+        headers: headers
+      }, '*');
+
+      // Safety timeout: 10 minutes (matches Rust-side timeout)
+      setTimeout(function() {
+        if (_pending[id]) {
+          console.error('[tauri-fetch] Timeout for ' + method + ' ' + url + ' (id: ' + id + ')');
+          delete _pending[id];
+          reject(new Error('tauri-fetch timeout after 600s'));
+        }
+      }, 600000);
+    }).then(function(data) {
+      console.log('[tauri-fetch] Got response for ' + method + ' ' + url + ': ' + data.status);
+      return new Response(data.body, {
+        status: data.status,
+        headers: data.headers
+      });
+    });
+  };
+
+  console.log('[tauri-fetch] Fetch override active: POST/PUT/PATCH/DELETE -> Tauri relay');
+})();
+"#;
+
 /// Write a log line to the shared app log file.
 /// This ensures proxy logs appear in the same file the Logs viewer reads.
 fn plog(log_file: &PathBuf, level: &str, msg: &str) {
@@ -326,10 +422,74 @@ async fn handle_request(
 
     let mut response_builder = Response::builder().status(status);
 
+    // Copy headers but skip content-length for HTML (we'll modify the body)
+    let is_html = content_type.contains("text/html");
     for (name, value) in upstream_resp.headers() {
         if let Ok(v) = value.to_str() {
+            // Skip content-length for HTML since we'll inject a script
+            if is_html && name == "content-length" {
+                continue;
+            }
             response_builder = response_builder.header(name.as_str(), v);
         }
+    }
+
+    // For HTML responses, buffer the body and inject the fetch-override script.
+    // This script overrides window.fetch for POST/PUT/PATCH/DELETE so those
+    // requests are relayed via postMessage to the parent Tauri webview, which
+    // executes them through Rust's reqwest (bypassing WKWebView timeouts).
+    if is_html {
+        let html_bytes = match upstream_resp.bytes().await {
+            Ok(b) => b,
+            Err(e) => {
+                plog(
+                    &log_file,
+                    "ERROR",
+                    &format!("[proxy] #{} Failed to read HTML body: {}", req_id, e),
+                );
+                Bytes::from("Proxy error reading HTML")
+            }
+        };
+
+        let html = String::from_utf8_lossy(&html_bytes);
+        let inject_script = FETCH_OVERRIDE_SCRIPT;
+
+        // Inject after <head> tag (or at the very beginning if no <head>)
+        let modified = if let Some(pos) = html.find("<head>") {
+            let insert_at = pos + "<head>".len();
+            format!(
+                "{}<script>{}</script>{}",
+                &html[..insert_at],
+                inject_script,
+                &html[insert_at..]
+            )
+        } else if let Some(pos) = html.find("<HEAD>") {
+            let insert_at = pos + "<HEAD>".len();
+            format!(
+                "{}<script>{}</script>{}",
+                &html[..insert_at],
+                inject_script,
+                &html[insert_at..]
+            )
+        } else {
+            format!("<script>{}</script>{}", inject_script, html)
+        };
+
+        plog(
+            &log_file,
+            "INFO",
+            &format!(
+                "[proxy] #{} Injected fetch-override script into HTML ({} -> {} bytes)",
+                req_id,
+                html_bytes.len(),
+                modified.len(),
+            ),
+        );
+
+        let body = Full::new(Bytes::from(modified));
+        return Ok(response_builder
+            .body(http_body_util::Either::Left(body))
+            .unwrap());
     }
 
     // Stream the response body through without buffering.

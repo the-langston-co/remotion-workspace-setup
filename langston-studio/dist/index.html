@@ -833,6 +833,49 @@
     
     console.log('[init] Event listeners registered, app ready');
     
+    // ---------------------------------------------------------------
+    // postMessage relay: iframe fetch → Tauri invoke → Rust reqwest
+    // ---------------------------------------------------------------
+    // The proxy injects a script into the OpenCode HTML that overrides
+    // window.fetch for POST/PUT/PATCH/DELETE. Those requests are sent
+    // here via postMessage. We execute them through Tauri's invoke
+    // (which runs reqwest in Rust with 600s timeout), completely
+    // bypassing WKWebView's ~60s idle connection kill.
+    window.addEventListener('message', async function(event) {
+      if (!event.data || event.data.type !== 'tauri-fetch') return;
+      
+      const { id, method, url, body, headers } = event.data;
+      console.log(`[tauri-fetch-relay] ${method} ${url} (id: ${id})`);
+      
+      try {
+        const result = await invoke('proxy_fetch', {
+          method: method,
+          url: url,
+          body: body || null,
+          headers: headers || {}
+        });
+        console.log(`[tauri-fetch-relay] ${method} ${url} -> ${result.status} (id: ${id})`);
+        event.source.postMessage({
+          type: 'tauri-fetch-response',
+          id: id,
+          status: result.status,
+          headers: result.headers,
+          body: result.body
+        }, '*');
+      } catch (error) {
+        console.error(`[tauri-fetch-relay] ${method} ${url} ERROR (id: ${id}):`, error);
+        if (window.Sentry) {
+          Sentry.captureMessage(`tauri-fetch-relay error: ${method} ${url}: ${error}`, 'error');
+        }
+        event.source.postMessage({
+          type: 'tauri-fetch-error',
+          id: id,
+          error: String(error)
+        }, '*');
+      }
+    });
+    console.log('[init] postMessage fetch relay registered');
+    
     async function checkServer(url) {
       try {
         const response = await fetch(url, { mode: 'no-cors' });

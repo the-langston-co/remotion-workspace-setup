@@ -2,12 +2,14 @@ mod proxy;
 
 use chrono::Local;
 use sentry::IntoDsn;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 const SENTRY_DSN: &str = "https://3a30fa628bbd0e5f55d9d25f394076c0@o4506593499873280.ingest.us.sentry.io/4510817219444736";
@@ -379,6 +381,18 @@ fn setup_workspace(app: &AppHandle) -> Result<(), String> {
             }
         }
 
+        // Keep AGENTS.md in sync with the bundled template so the AI
+        // always has correct port numbers and workflow instructions.
+        let agents_src = resource_path.join("AGENTS.md");
+        let agents_dst = workspace.join("AGENTS.md");
+        if agents_src.exists() {
+            fs::copy(&agents_src, &agents_dst)
+                .map_err(|e| format!("Failed to update AGENTS.md: {}", e))?;
+            if let Some(state) = app.try_state::<Mutex<AppState>>() {
+                write_log(&state, "INFO", "Updated AGENTS.md from template");
+            }
+        }
+
         git_auto_save(app, &workspace, &path_env, "Update app config");
 
         emit_status(app, "Workspace ready", 100);
@@ -690,6 +704,75 @@ fn spawn_remotion(app: &AppHandle, workspace: &PathBuf) -> Result<Child, String>
     }
 }
 
+/// Response from the Rust-side HTTP fetch, serialized back to the webview.
+#[derive(Serialize)]
+struct ProxyFetchResponse {
+    status: u16,
+    headers: HashMap<String, String>,
+    body: String,
+}
+
+/// Execute an HTTP request through Rust's reqwest, bypassing WKWebView's
+/// networking stack (and its ~60s idle timeout on POST requests).
+/// Called from the parent webview via postMessage relay from the iframe.
+#[tauri::command]
+async fn proxy_fetch(
+    method: String,
+    url: String,
+    body: Option<String>,
+    headers: HashMap<String, String>,
+) -> Result<ProxyFetchResponse, String> {
+    let client = reqwest::Client::builder()
+        .read_timeout(Duration::from_secs(600))
+        .connect_timeout(Duration::from_secs(30))
+        .pool_idle_timeout(Duration::from_secs(600))
+        .no_proxy()
+        .build()
+        .map_err(|e| format!("proxy_fetch client build error: {}", e))?;
+
+    let rw_method = match method.to_uppercase().as_str() {
+        "POST" => reqwest::Method::POST,
+        "PUT" => reqwest::Method::PUT,
+        "PATCH" => reqwest::Method::PATCH,
+        "DELETE" => reqwest::Method::DELETE,
+        "HEAD" => reqwest::Method::HEAD,
+        "OPTIONS" => reqwest::Method::OPTIONS,
+        _ => reqwest::Method::GET,
+    };
+
+    let mut req = client.request(rw_method, &url);
+
+    for (k, v) in &headers {
+        req = req.header(k.as_str(), v.as_str());
+    }
+
+    if let Some(b) = body {
+        req = req.body(b);
+    }
+
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("proxy_fetch send error: {}", e))?;
+
+    let status = resp.status().as_u16();
+    let resp_headers: HashMap<String, String> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+        .collect();
+    let resp_body = resp
+        .text()
+        .await
+        .map_err(|e| format!("proxy_fetch body error: {}", e))?;
+
+    Ok(ProxyFetchResponse {
+        status,
+        headers: resp_headers,
+        body: resp_body,
+    })
+}
+
 #[tauri::command]
 fn get_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
@@ -766,6 +849,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
+            proxy_fetch,
             get_version,
             get_logs,
             get_log_file_path,
