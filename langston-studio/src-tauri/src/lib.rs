@@ -440,10 +440,12 @@ fn setup_workspace(app: &AppHandle) -> Result<(), String> {
         run_nvm_command("npm install --no-progress", &workspace, &path_env)
             .map_err(|e| format!("Failed to run npm install via nvm: {}", e))?
     } else {
-        Command::new("npm")
-            .args(["install"])
+        // Use the user's login shell to inherit their full PATH (Homebrew,
+        // fnm, volta, etc.) — prevents ENOENT when npm isn't on system PATH.
+        let user_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+        Command::new(&user_shell)
+            .args(["-ilc", "npm install --no-progress"])
             .current_dir(&workspace)
-            .env("PATH", &path_env)
             .env("npm_config_progress", "false")
             .output()
             .map_err(|e| format!("Failed to run npm install: {}", e))?
@@ -643,41 +645,39 @@ fn spawn_remotion(app: &AppHandle, workspace: &PathBuf) -> Result<Child, String>
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
-    let path_env = get_path_env();
     let use_nvm = has_nvm();
 
-    if let Some(state) = app.try_state::<Mutex<AppState>>() {
-        write_log(
-            &state,
-            "INFO",
-            &format!(
-                "Spawning Remotion via {}",
-                if use_nvm { "nvm" } else { "direct npm" }
-            ),
-        );
-    }
-
-    let spawn_result = if use_nvm {
+    // Spawn Remotion through the user's login shell so we inherit their full
+    // PATH (nvm, fnm, volta, Homebrew, etc.). This prevents ENOENT errors
+    // when npm isn't on the hardcoded system PATH.
+    let spawn_result = {
         let home = dirs::home_dir().unwrap_or_default();
-        let nvm_sh = home.join(".nvm/nvm.sh");
-        let script = format!(
-            "source {:?} && nvm use --silent && BROWSER=none npm run dev",
-            nvm_sh
-        );
-        Command::new("bash")
-            .args(["-c", &script])
+        let user_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+
+        // Build a script that:
+        // 1. Sources nvm if available (activates the project's .nvmrc node version)
+        // 2. Falls back to whatever npm is on the user's login shell PATH
+        let script = if use_nvm {
+            let nvm_sh = home.join(".nvm/nvm.sh");
+            format!(
+                "source {:?} && nvm use --silent 2>/dev/null; BROWSER=none exec npm run dev",
+                nvm_sh
+            )
+        } else {
+            "BROWSER=none exec npm run dev".to_string()
+        };
+
+        if let Some(state) = app.try_state::<Mutex<AppState>>() {
+            write_log(
+                &state,
+                "INFO",
+                &format!("Spawning Remotion via login shell: {} -ilc '...'", user_shell),
+            );
+        }
+
+        Command::new(&user_shell)
+            .args(["-ilc", &script])
             .current_dir(workspace)
-            .env("PATH", &path_env)
-            .env("NVM_DIR", home.join(".nvm"))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-    } else {
-        Command::new("npm")
-            .args(["run", "dev"])
-            .current_dir(workspace)
-            .env("PATH", &path_env)
-            .env("BROWSER", "none")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
